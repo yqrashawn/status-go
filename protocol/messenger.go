@@ -487,7 +487,7 @@ func (m *Messenger) processSentMessages(ids []string) error {
 			return errors.Wrapf(err, "Can't save raw message marked as sent")
 		}
 
-		err = m.UpdateMessageOutgoingStatus(id, "sent")
+		err = m.UpdateMessageOutgoingStatus(id, common.OutgoingStatusSent)
 		if err != nil {
 			return err
 		}
