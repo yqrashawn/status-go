@@ -21,7 +21,7 @@ import (
 
 // tolerance is how many seconds of potentially out-of-order messages we want to fetch
 var tolerance uint32 = 60
-var mailserverRequestTimeout = 60 * time.Second
+var mailserverRequestTimeout = 15 * time.Second
 var oneMonthInSeconds uint32 = 31 * 24 * 60 * 60
 
 var ErrNoFiltersForChat = errors.New("no filter registered for given chat")
@@ -228,6 +228,37 @@ func (m *Messenger) resetFiltersPriority(filters []*transport.Filter) {
 	}
 }
 
+func (m *Messenger) RequestAllHistoricMessages2() (*MessengerResponse, error) {
+	m.mailMutex.Lock()
+	defer m.mailMutex.Unlock()
+	tries := 0
+	for tries < 4 {
+		m.logger.Info("Trying pulling messages", zap.Int("try", tries))
+		response, err := m.RequestAllHistoricMessages()
+		if err == nil {
+			return response, nil
+		}
+		tries++
+
+		m.logger.Info("Disconnecting mailserver")
+		m.DisconnectActiveMailserver()
+		m.logger.Info("waiting until mailserver available")
+		err = m.waitUntiMailserverAvailable()
+		if err != nil {
+			return nil, err
+		}
+		m.logger.Info("finding new mailserver")
+		err = m.findNewMailserver()
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	return nil, errors.New("could not fetch history")
+
+}
+
 // RequestAllHistoricMessages requests all the historic messages for any topic
 func (m *Messenger) RequestAllHistoricMessages() (*MessengerResponse, error) {
 	shouldSync, err := m.shouldSync()
@@ -256,7 +287,11 @@ func (m *Messenger) RequestAllHistoricMessages() (*MessengerResponse, error) {
 	filters := m.transport.Filters()
 	m.updateFiltersPriority(filters)
 	defer m.resetFiltersPriority(filters)
-	return m.syncFilters(filters)
+	response, err := m.syncFilters(filters)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 func getPrioritizedBatches() []int {
@@ -485,11 +520,14 @@ func (m *Messenger) processMailserverBatch(batch MailserverBatch) error {
 	ctx, cancel := context.WithTimeout(context.Background(), mailserverRequestTimeout)
 	defer cancel()
 
+	logger.Info("sending request")
 	cursor, storeCursor, err := m.transport.SendMessagesRequestForTopics(ctx, m.mailserver, batch.From, batch.To, nil, nil, batch.Topics, true)
 	if err != nil {
+		logger.Info("FAILED", zap.Error(err))
 		return err
 	}
 
+	logger.Info("for request")
 	for len(cursor) != 0 || storeCursor != nil {
 		logger.Info("retrieved cursor", zap.String("cursor", types.EncodeHex(cursor)))
 		err = func() error {

@@ -278,16 +278,17 @@ func (m *Messenger) findStoreNode() error {
 	sort.Sort(byRTTMs(availableMailservers))
 
 	if len(availableMailservers) == 0 {
-		m.logger.Warn("No store nodes available") // Do nothing...
+		m.logger.Warn("No store nodes available, av =0 ") // Do nothing...
 		return nil
 	}
+
+	m.logger.Info("AVAIBLE", zap.Int("av", len(availableMailservers)))
 
 	// Picks a random mailserver amongs the ones with the lowest latency
 	// The pool size is 1/4 of the mailservers were pinged successfully
 	pSize := poolSize(len(availableMailservers) - 1)
 	if pSize <= 0 {
-		m.logger.Warn("No store nodes available") // Do nothing...
-		return nil
+		pSize = len(availableMailservers)
 	}
 
 	r, err := rand.Int(rand.Reader, big.NewInt(int64(pSize)))
@@ -312,6 +313,70 @@ func (m *Messenger) getFleet() (string, error) {
 		fleet = params.FleetProd
 	}
 	return fleet, nil
+}
+
+func (m *Messenger) waitUntiMailserverAvailable() error {
+	allMailservers, err := m.allMailserversV1()
+	if err != nil {
+		return err
+	}
+	var canConnectAfters []time.Time
+	now := time.Now()
+	for _, node := range allMailservers {
+		pInfo, ok := m.mailserverCycle.peers[node.ID().String()]
+		// No info about mailserver, mailserver is available
+		if !ok {
+			m.logger.Info("Mailserver without info found, returning")
+			return nil
+		}
+		canConnectAfters = append(canConnectAfters, pInfo.canConnectAfter)
+
+	}
+	sort.Slice(canConnectAfters, func(i, j int) bool {
+		return canConnectAfters[i].Before(canConnectAfters[j])
+	})
+
+	m.logger.Info("Checking")
+	// If the first is before, we can return
+	if canConnectAfters[0].Before(now) {
+		m.logger.Info("Before now")
+		return nil
+	}
+
+	m.logger.Info("Waiting ")
+	select {
+	case <-time.After(canConnectAfters[0].Sub(now)):
+		m.logger.Info("Waited")
+		return nil
+	}
+
+	return nil
+
+}
+
+func (m *Messenger) allMailserversV1() ([]*enode.Node, error) {
+	allMailservers := parseNodes(m.config.clusterConfig.TrustedMailServers)
+
+	// Append user mailservers
+	fleet, err := m.getFleet()
+	if err != nil {
+		return nil, err
+	}
+
+	customMailservers, err := m.mailservers.Mailservers()
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range customMailservers {
+		if c.Fleet == fleet {
+			mNode, err := enode.ParseV4(c.Address)
+			if err != nil {
+				allMailservers = append(allMailservers, mNode)
+			}
+		}
+	}
+
+	return allMailservers, nil
 }
 
 func (m *Messenger) findNewMailserverV1() error {
@@ -377,8 +442,7 @@ func (m *Messenger) findNewMailserverV1() error {
 	// The pool size is 1/4 of the mailservers were pinged successfully
 	pSize := poolSize(len(availableMailservers) - 1)
 	if pSize <= 0 {
-		m.logger.Warn("No store nodes available") // Do nothing...
-		return nil
+		pSize = len(availableMailservers)
 	}
 
 	r, err := rand.Int(rand.Reader, big.NewInt(int64(pSize)))
@@ -386,7 +450,9 @@ func (m *Messenger) findNewMailserverV1() error {
 		return err
 	}
 
-	return m.connectToMailserver(parseNodes([]string{availableMailservers[r.Int64()].Address})[0])
+	ms := availableMailservers[r.Int64()]
+	m.logger.Info("Connecting to mailserver", zap.String("address", ms.Address))
+	return m.connectToMailserver(parseNodes([]string{ms.Address})[0])
 }
 
 func (m *Messenger) activeMailserverStatus() (connStatus, error) {
@@ -453,6 +519,22 @@ func (m *Messenger) connectToMailserver(node *enode.Node) error {
 				lastConnectionAttempt: time.Now(),
 			}
 		}
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+
+	select {
+	case <-ticker.C:
+		activeMailserverStatus, err := m.activeMailserverStatus()
+		if err != nil {
+			return err
+		}
+		if activeMailserverStatus == connected {
+			ticker.Stop()
+			break
+		}
+	case <-time.After(60 * time.Second):
+		ticker.Stop()
 	}
 
 	if nodeConnected {
