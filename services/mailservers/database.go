@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/status-im/status-go/protocol/transport"
 )
 
@@ -18,6 +19,10 @@ type Mailserver struct {
 	Address  string `json:"address"`
 	Password string `json:"password,omitempty"`
 	Fleet    string `json:"fleet"`
+}
+
+func (m Mailserver) Enode() (*enode.Node, error) {
+	return enode.ParseV4(m.Address)
 }
 
 func (m Mailserver) nullablePassword() (val sql.NullString) {

@@ -91,6 +91,7 @@ type BundleAddedSignal struct {
 
 type MailserverSignal struct {
 	Address string `json:"address"`
+	ID      string `json:"id"`
 }
 
 type Filter struct {
@@ -205,14 +206,16 @@ func SendNewMessages(obj json.Marshaler) {
 	send(EventNewMessages, obj)
 }
 
-func SendMailserverAvailable(nodeAddress string) {
+func SendMailserverAvailable(nodeAddress, id string) {
 	send(EventMailserverAvailable, MailserverSignal{
 		Address: nodeAddress,
+		ID:      id,
 	})
 }
 
-func SendMailserverChanged(nodeAddress string) {
+func SendMailserverChanged(nodeAddress, id string) {
 	send(EventMailserverChanged, MailserverSignal{
 		Address: nodeAddress,
+		ID:      id,
 	})
 }

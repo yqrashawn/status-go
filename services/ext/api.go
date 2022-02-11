@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/status-im/status-go/eth-node/crypto"
@@ -697,24 +696,6 @@ func (api *PublicAPI) SyncBookmark(ctx context.Context, bookmark browsers.Bookma
 
 func (api *PublicAPI) SignMessageWithChatKey(ctx context.Context, message string) (types.HexBytes, error) {
 	return api.service.messenger.SignMessage(message)
-}
-
-func (api *PublicAPI) UpdateMailservers(enodes []string) error {
-	nodes := make([]*enode.Node, len(enodes))
-	for i, rawurl := range enodes {
-		node, err := enode.ParseV4(rawurl)
-		if err != nil {
-			return err
-		}
-		nodes[i] = node
-	}
-	return api.service.UpdateMailservers(nodes)
-}
-
-// Used in WakuV2 - Once proper peer management is added, we should probably remove this, or at least
-// change mailserver so we use a peer.ID instead of a string / []byte
-func (api *PublicAPI) SetMailserver(peer string) {
-	api.service.SetMailserver([]byte(peer))
 }
 
 // PushNotifications server endpoints
