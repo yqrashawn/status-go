@@ -27,7 +27,7 @@ var oneMonthInSeconds uint32 = 31 * 24 * 60 * 60
 var ErrNoFiltersForChat = errors.New("no filter registered for given chat")
 
 func (m *Messenger) shouldSync() (bool, error) {
-	if m.mailserver == nil || !m.online() {
+	if m.mailserverCycle.activeMailserver == nil || !m.online() {
 		return false, nil
 	}
 
@@ -521,7 +521,7 @@ func (m *Messenger) processMailserverBatch(batch MailserverBatch) error {
 	defer cancel()
 
 	logger.Info("sending request")
-	cursor, storeCursor, err := m.transport.SendMessagesRequestForTopics(ctx, m.mailserver, batch.From, batch.To, nil, nil, batch.Topics, true)
+	cursor, storeCursor, err := m.transport.SendMessagesRequestForTopics(ctx, m.activeMailserverID(), batch.From, batch.To, nil, nil, batch.Topics, true)
 	if err != nil {
 		logger.Info("FAILED", zap.Error(err))
 		return err
@@ -534,7 +534,7 @@ func (m *Messenger) processMailserverBatch(batch MailserverBatch) error {
 			ctx, cancel := context.WithTimeout(context.Background(), mailserverRequestTimeout)
 			defer cancel()
 
-			cursor, storeCursor, err = m.transport.SendMessagesRequestForTopics(ctx, m.mailserver, batch.From, batch.To, cursor, storeCursor, batch.Topics, true)
+			cursor, storeCursor, err = m.transport.SendMessagesRequestForTopics(ctx, m.activeMailserverID(), batch.From, batch.To, cursor, storeCursor, batch.Topics, true)
 			if err != nil {
 				return err
 			}
@@ -566,11 +566,11 @@ func (m *Messenger) RequestHistoricMessagesForFilter(
 	filter *transport.Filter,
 	waitForResponse bool,
 ) ([]byte, *types.StoreRequestCursor, error) {
-	if m.mailserver == nil {
+	if m.activeMailserverID() == nil {
 		return nil, nil, errors.New("no mailserver selected")
 	}
 
-	return m.transport.SendMessagesRequestForFilter(ctx, m.mailserver, from, to, cursor, previousStoreCursor, filter, waitForResponse)
+	return m.transport.SendMessagesRequestForFilter(ctx, m.activeMailserverID(), from, to, cursor, previousStoreCursor, filter, waitForResponse)
 }
 
 func (m *Messenger) SyncChatFromSyncedFrom(chatID string) (uint32, error) {

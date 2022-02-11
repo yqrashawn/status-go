@@ -133,6 +133,19 @@ func (s byRTTMs) Less(i, j int) bool {
 	return *s[i].RTTMs < *s[j].RTTMs
 }
 
+//TODO: error handling
+func (m *Messenger) activeMailserverID() []byte {
+	if m.mailserverCycle.activeMailserver == nil {
+		return nil
+	}
+
+	id, err := m.mailserverCycle.activeMailserver.IDBytes()
+	if err != nil {
+		return nil
+	}
+	return id
+
+}
 func (m *Messenger) StartMailserverCycle() error {
 	canUseMailservers, err := m.settings.CanUseMailservers()
 	if err != nil {

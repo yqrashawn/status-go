@@ -115,7 +115,6 @@ type Messenger struct {
 	allInstallations           *installationMap
 	modifiedInstallations      *stringBoolMap
 	installationID             string
-	mailserver                 []byte
 	mailserverCycle            mailserverCycle
 	database                   *sql.DB
 	multiAccounts              *multiaccounts.Database

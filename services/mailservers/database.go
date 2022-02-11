@@ -25,6 +25,15 @@ func (m Mailserver) Enode() (*enode.Node, error) {
 	return enode.ParseV4(m.Address)
 }
 
+func (m Mailserver) IDBytes() ([]byte, error) {
+
+	node, err := enode.ParseV4(m.Address)
+	if err != nil {
+		return nil, err
+	}
+	return node.ID().Bytes(), nil
+}
+
 func (m Mailserver) nullablePassword() (val sql.NullString) {
 	if m.Password != "" {
 		val.String = m.Password
