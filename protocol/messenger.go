@@ -645,15 +645,19 @@ func (m *Messenger) Start() (*MessengerResponse, error) {
 	}
 	response := &MessengerResponse{}
 
+	mailservers := mailserversMap()
 	if m.mailserversDatabase != nil {
 		mailservers, err := m.mailserversDatabase.Mailservers()
 		if err != nil {
 			return nil, err
 		}
-		response.Mailservers = mailservers
+		for idx := range mailservers {
+			mailservers = append(mailservers, mailservers[idx])
+		}
 
 	}
 
+	response.Mailservers = mailservers
 	err = m.StartMailserverCycle()
 	if err != nil {
 		return nil, err
