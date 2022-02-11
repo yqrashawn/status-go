@@ -19,6 +19,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/status-im/status-go/eth-node/types"
 	"github.com/status-im/status-go/params"
 	"github.com/status-im/status-go/services/mailservers"
 	"github.com/status-im/status-go/signal"
@@ -26,10 +27,11 @@ import (
 
 const defaultBackoff = 30 * time.Second
 
-func mailserversByFleet(fleet string) []mailservers.Mailserver {
+func (m *Messenger) mailserversByFleet(fleet string) []mailservers.Mailserver {
 	var items []mailservers.Mailserver
 	for _, ms := range mailserversMap() {
-		if ms.Fleet == fleet {
+		m.logger.Info("fleet", zap.String("f1", fleet), zap.String("f2", ms.Fleet))
+		if "eth."+ms.Fleet == fleet {
 			items = append(items, ms)
 		}
 	}
@@ -186,6 +188,7 @@ func (m *Messenger) disconnectV1Mailserver() error {
 	} else {
 		m.mailserverCycle.peers[m.mailserverCycle.activeMailserver.ID] = peerStatus{
 			status:          disconnected,
+			mailserver:      *m.mailserverCycle.activeMailserver,
 			canConnectAfter: time.Now().Add(defaultBackoff),
 		}
 	}
@@ -296,6 +299,8 @@ func (m *Messenger) findStoreNode() error {
 		return err
 	}
 
+	m.logger.Info("PING RESULT", zap.Any("ping", pingResult))
+
 	var availableMailservers []*mailservers.PingResult
 	for _, result := range pingResult {
 		if result.Err != nil {
@@ -389,7 +394,7 @@ func (m *Messenger) allMailserversV1() ([]mailservers.Mailserver, error) {
 		return nil, err
 	}
 
-	allMailservers := mailserversByFleet(fleet)
+	allMailservers := m.mailserversByFleet(fleet)
 
 	customMailservers, err := m.mailservers.Mailservers()
 	if err != nil {
@@ -413,7 +418,8 @@ func (m *Messenger) findNewMailserverV1() error {
 		return err
 	}
 
-	allMailservers := mailserversByFleet(fleet)
+	allMailservers := m.mailserversByFleet(fleet)
+	m.logger.Info("all mai", zap.Any("ha", allMailservers))
 
 	customMailservers, err := m.mailservers.Mailservers()
 	if err != nil {
@@ -441,11 +447,13 @@ func (m *Messenger) findNewMailserverV1() error {
 		mailserverStr = append(mailserverStr, m.Address)
 	}
 
+	m.logger.Info("PING RESULT", zap.Any("ping", mailserverStr))
 	pingResult, err := mailservers.DoPing(context.Background(), mailserverStr, 500, mailservers.EnodeStringToAddr)
 	if err != nil {
 		return err
 	}
 
+	m.logger.Info("PING RESULT", zap.Any("ping", pingResult))
 	var availableMailservers []*mailservers.PingResult
 	for _, result := range pingResult {
 		if result.Err != nil {
@@ -474,7 +482,7 @@ func (m *Messenger) findNewMailserverV1() error {
 
 	msPing := availableMailservers[r.Int64()]
 	var ms mailservers.Mailserver
-	for idx := range allMailservers {
+	for idx := range mailserverList {
 		if msPing.Address == mailserverList[idx].Address {
 			ms = mailserverList[idx]
 		}
@@ -543,10 +551,12 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 		if ok {
 			pInfo.status = connecting
 			pInfo.lastConnectionAttempt = time.Now()
+			pInfo.mailserver = ms
 			m.mailserverCycle.peers[ms.ID] = pInfo
 		} else {
 			m.mailserverCycle.peers[ms.ID] = peerStatus{
 				status:                connecting,
+				mailserver:            ms,
 				lastConnectionAttempt: time.Now(),
 			}
 		}
@@ -739,7 +749,12 @@ func (m *Messenger) updateWakuV1PeerStatus() {
 
 				found := false
 				for _, connectedPeer := range connectedPeers {
-					if enode.HexID(connectedPeer.ID) == enode.HexID(pID) {
+					idBytes, err := pInfo.mailserver.IDBytes()
+					if err != nil {
+						return
+					}
+					m.logger.Info("IDS", zap.Any("he", types.EncodeHex(idBytes)), zap.Any("be", connectedPeer.ID))
+					if enode.HexID(connectedPeer.ID).String() == types.EncodeHex(idBytes)[2:] {
 						found = true
 						break
 					}

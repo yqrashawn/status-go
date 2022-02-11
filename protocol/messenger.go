@@ -147,6 +147,7 @@ type peerStatus struct {
 	status                connStatus
 	canConnectAfter       time.Time
 	lastConnectionAttempt time.Time
+	mailserver            mailserversDB.Mailserver
 }
 type mailserverCycle struct {
 	sync.RWMutex
