@@ -644,16 +644,9 @@ func (m *Messenger) Start() (*MessengerResponse, error) {
 	}
 	response := &MessengerResponse{}
 
-	mailservers := mailserversMap()
-	if m.mailserversDatabase != nil {
-		mailservers, err := m.mailserversDatabase.Mailservers()
-		if err != nil {
-			return nil, err
-		}
-		for idx := range mailservers {
-			mailservers = append(mailservers, mailservers[idx])
-		}
-
+	mailservers, err := m.allMailserversV1()
+	if err != nil {
+		return nil, err
 	}
 
 	response.Mailservers = mailservers

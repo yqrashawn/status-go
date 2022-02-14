@@ -961,6 +961,14 @@ func (api *PublicAPI) ImageServerURL() string {
 	return api.service.messenger.ImageServerURL()
 }
 
+func (api *PublicAPI) ToggleUseMailservers(value bool) error {
+	return api.service.messenger.ToggleUseMailservers(value)
+}
+
+func (api *PublicAPI) SetPinnedMailservers(pinnedMailservers map[string]string) error {
+	return api.service.messenger.SetPinnedMailservers(pinnedMailservers)
+}
+
 // -----
 // HELPER
 // -----

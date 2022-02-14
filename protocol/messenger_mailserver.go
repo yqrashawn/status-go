@@ -243,7 +243,7 @@ func (m *Messenger) RequestAllHistoricMessages2() (*MessengerResponse, error) {
 		m.logger.Info("Disconnecting mailserver")
 		m.DisconnectActiveMailserver()
 		m.logger.Info("waiting until mailserver available")
-		err = m.waitUntiMailserverAvailable()
+		err = m.waitUntilMailserverAvailable()
 		if err != nil {
 			return nil, err
 		}
@@ -566,8 +566,12 @@ func (m *Messenger) RequestHistoricMessagesForFilter(
 	filter *transport.Filter,
 	waitForResponse bool,
 ) ([]byte, *types.StoreRequestCursor, error) {
+
 	if m.activeMailserverID() == nil {
-		return nil, nil, errors.New("no mailserver selected")
+		m.cycleMailservers()
+		if m.activeMailserverID() == nil {
+			return nil, nil, errors.New("no mailserver selected")
+		}
 	}
 
 	return m.transport.SendMessagesRequestForFilter(ctx, m.activeMailserverID(), from, to, cursor, previousStoreCursor, filter, waitForResponse)
@@ -705,6 +709,31 @@ func (m *Messenger) waitUntilP2PMessagesProcessed() {
 
 func (m *Messenger) LoadFilters(filters []*transport.Filter) ([]*transport.Filter, error) {
 	return m.transport.LoadFilters(filters)
+}
+
+func (m *Messenger) ToggleUseMailservers(value bool) error {
+	err := m.settings.SetUseMailservers(value)
+	if err != nil {
+		return err
+	}
+
+	if value {
+		m.cycleMailservers()
+		return nil
+	}
+
+	m.DisconnectActiveMailserver()
+	return nil
+}
+
+func (m *Messenger) SetPinnedMailservers(mailservers map[string]string) error {
+	err := m.settings.SetPinnedMailservers(mailservers)
+	if err != nil {
+		return err
+	}
+
+	m.cycleMailservers()
+	return nil
 }
 
 func (m *Messenger) RemoveFilters(filters []*transport.Filter) error {

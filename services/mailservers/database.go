@@ -16,6 +16,7 @@ import (
 type Mailserver struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
+	Custom   bool   `json:"custom"`
 	Address  string `json:"address"`
 	Password string `json:"password,omitempty"`
 	Fleet    string `json:"fleet"`
@@ -133,6 +134,7 @@ func (d *Database) Mailservers() ([]Mailserver, error) {
 		); err != nil {
 			return nil, err
 		}
+		m.Custom = true
 		if password.Valid {
 			m.Password = password.String
 		}
