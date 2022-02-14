@@ -579,7 +579,7 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 	}
 
 	if nodeConnected {
-		m.logger.Info("Mailserver available")
+		m.logger.Info("Mailserver available", zap.String("id", ms.ID), zap.Any("ms", m.mailserverCycle.peers[ms.ID]))
 		signal.SendMailserverAvailable(m.mailserverCycle.activeMailserver.Address, m.mailserverCycle.activeMailserver.ID)
 	}
 
@@ -727,6 +727,27 @@ func (m *Messenger) updateWakuV2PeerStatus() {
 	}
 }
 
+func (m *Messenger) mailserverHexToID(hexID string) (string, error) {
+	allMailservers, err := m.allMailserversV1()
+	if err != nil {
+		return "", err
+	}
+
+	for _, ms := range allMailservers {
+		node, err := ms.Enode()
+		if err != nil {
+			return "", err
+		}
+
+		if hexID == node.ID().String() {
+			return ms.ID, nil
+		}
+
+	}
+
+	return "", nil
+}
+
 func (m *Messenger) updateWakuV1PeerStatus() {
 	// TODO: remove this function once WakuV1 is deprecated
 
@@ -760,7 +781,7 @@ func (m *Messenger) updateWakuV1PeerStatus() {
 					}
 				}
 				if !found && (pInfo.status == connected || (pInfo.status == connecting && pInfo.lastConnectionAttempt.Add(8*time.Second).Before(time.Now()))) {
-					m.logger.Info("Peer disconnected", zap.String("peer", enode.HexID(pID).String()))
+					m.logger.Info("Peer disconnected", zap.String("peer", pID))
 					pInfo.status = disconnected
 					pInfo.canConnectAfter = time.Now().Add(defaultBackoff)
 				}
@@ -770,23 +791,26 @@ func (m *Messenger) updateWakuV1PeerStatus() {
 
 			for _, connectedPeer := range connectedPeers {
 				hexID := enode.HexID(connectedPeer.ID).String()
-				pInfo, ok := m.mailserverCycle.peers[hexID]
+				id, err := m.mailserverHexToID(hexID)
+				if err != nil {
+					m.logger.Error("failed to convert id to hex", zap.Error(err))
+					return
+				}
+				if id == "" {
+					m.logger.Warn("id not found", zap.String("hex-id", id))
+					continue
+				}
+				pInfo, ok := m.mailserverCycle.peers[id]
 				if !ok || pInfo.status != connected {
 					m.logger.Info("Peer connected", zap.String("peer", hexID))
 					pInfo.status = connected
 					pInfo.canConnectAfter = time.Now().Add(defaultBackoff)
 
-					node, err := m.mailserverCycle.activeMailserver.Enode()
-					if err != nil {
-						m.logger.Error("failed to parse node", zap.Error(err))
-						return
-					}
-
-					if m.mailserverCycle.activeMailserver != nil && hexID == node.ID().String() {
-						m.logger.Info("Mailserver available")
+					if m.mailserverCycle.activeMailserver != nil && id == m.mailserverCycle.activeMailserver.ID {
+						m.logger.Info("Mailserver available", zap.String("hex", hexID))
 						signal.SendMailserverAvailable(m.mailserverCycle.activeMailserver.Address, m.mailserverCycle.activeMailserver.ID)
 					}
-					m.mailserverCycle.peers[hexID] = pInfo
+					m.mailserverCycle.peers[id] = pInfo
 				}
 			}
 			m.mailserverCycle.Unlock()
