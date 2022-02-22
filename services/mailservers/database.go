@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/status-im/status-go/protocol/transport"
 )
@@ -20,6 +22,7 @@ type Mailserver struct {
 	Address  string `json:"address"`
 	Password string `json:"password,omitempty"`
 	Fleet    string `json:"fleet"`
+	Version  uint   `json:"version"`
 }
 
 func (m Mailserver) Enode() (*enode.Node, error) {
@@ -27,12 +30,27 @@ func (m Mailserver) Enode() (*enode.Node, error) {
 }
 
 func (m Mailserver) IDBytes() ([]byte, error) {
+	if m.Version == 2 {
+		id, err := peer.Decode(m.UniqueID())
+		if err != nil {
+			return nil, err
+		}
+		return []byte(id.Pretty()), err
+	}
 
 	node, err := enode.ParseV4(m.Address)
 	if err != nil {
 		return nil, err
 	}
 	return node.ID().Bytes(), nil
+}
+
+func (m Mailserver) UniqueID() string {
+	if m.Version == 2 {
+		s := strings.Split(m.Address, "/")
+		return s[len(s)-1]
+	}
+	return m.Address
 }
 
 func (m Mailserver) nullablePassword() (val sql.NullString) {
