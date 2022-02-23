@@ -129,8 +129,6 @@ type Messenger struct {
 
 	// TODO(samyoul) Determine if/how the remaining usage of this mutex can be removed
 	mutex sync.Mutex
-
-	mailMutex sync.Mutex
 }
 
 type connStatus int

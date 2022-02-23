@@ -21,7 +21,7 @@ import (
 
 // tolerance is how many seconds of potentially out-of-order messages we want to fetch
 var tolerance uint32 = 60
-var mailserverRequestTimeout = 15 * time.Second
+var mailserverRequestTimeout = 10 * time.Second
 var oneMonthInSeconds uint32 = 31 * 24 * 60 * 60
 
 var ErrNoFiltersForChat = errors.New("no filter registered for given chat")
@@ -54,6 +54,8 @@ func (m *Messenger) shouldSync() (bool, error) {
 }
 
 func (m *Messenger) scheduleSyncChat(chat *Chat) (bool, error) {
+	m.mailserverCycle.Lock()
+	defer m.mailserverCycle.Unlock()
 	shouldSync, err := m.shouldSync()
 	if err != nil {
 		m.logger.Error("failed to get should sync", zap.Error(err))
@@ -69,6 +71,7 @@ func (m *Messenger) scheduleSyncChat(chat *Chat) (bool, error) {
 
 		if err != nil {
 			m.logger.Error("failed to sync chat", zap.Error(err))
+			m.disconnectActiveMailserver()
 			return
 		}
 
@@ -83,6 +86,7 @@ func (m *Messenger) scheduleSyncChat(chat *Chat) (bool, error) {
 func (m *Messenger) scheduleSyncFilter(filter *transport.Filter) {
 	_, err := m.scheduleSyncFilters([]*transport.Filter{filter})
 	if err != nil {
+		m.disconnectActiveMailserver()
 		m.logger.Error("failed to schedule syncing filters", zap.Error(err))
 	}
 
@@ -229,19 +233,19 @@ func (m *Messenger) resetFiltersPriority(filters []*transport.Filter) {
 }
 
 func (m *Messenger) RequestAllHistoricMessagesWithRetries() (*MessengerResponse, error) {
-	m.mailMutex.Lock()
-	defer m.mailMutex.Unlock()
+	m.mailserverCycle.Lock()
+	defer m.mailserverCycle.Unlock()
 	tries := 0
-	for tries < 4 {
+	for tries < 2 {
 		m.logger.Info("Trying pulling messages", zap.Int("try", tries))
 		response, err := m.RequestAllHistoricMessages()
-		if err == nil {
+		if err == nil && response != nil {
 			return response, nil
 		}
 		tries++
 
 		m.logger.Info("Disconnecting mailserver")
-		m.DisconnectActiveMailserver()
+		m.disconnectActiveMailserver()
 		m.logger.Info("waiting until mailserver available")
 		err = m.waitUntilMailserverAvailable()
 		if err != nil {
@@ -589,6 +593,9 @@ func (m *Messenger) RequestHistoricMessagesForFilter(
 }
 
 func (m *Messenger) SyncChatFromSyncedFrom(chatID string) (uint32, error) {
+	m.mailserverCycle.Lock()
+	defer m.mailserverCycle.Unlock()
+
 	topics, err := m.topicsForChat(chatID)
 	if err != nil {
 		return 0, nil
@@ -617,6 +624,8 @@ func (m *Messenger) SyncChatFromSyncedFrom(chatID string) (uint32, error) {
 
 	err = m.processMailserverBatch(batch)
 	if err != nil {
+
+		m.disconnectActiveMailserver()
 		if m.config.messengerSignalsHandler != nil {
 			m.config.messengerSignalsHandler.HistoryRequestFailed(requestID, err)
 		}
@@ -723,6 +732,9 @@ func (m *Messenger) LoadFilters(filters []*transport.Filter) ([]*transport.Filte
 }
 
 func (m *Messenger) ToggleUseMailservers(value bool) error {
+	m.mailserverCycle.Lock()
+	defer m.mailserverCycle.Unlock()
+
 	err := m.settings.SetUseMailservers(value)
 	if err != nil {
 		return err
@@ -733,7 +745,7 @@ func (m *Messenger) ToggleUseMailservers(value bool) error {
 		return nil
 	}
 
-	m.DisconnectActiveMailserver()
+	m.disconnectActiveMailserver()
 	return nil
 }
 

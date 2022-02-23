@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -18,7 +19,7 @@ import (
 	"github.com/status-im/status-go/signal"
 )
 
-const defaultBackoff = 30 * time.Second
+const defaultBackoff = 10 * time.Second
 
 func (m *Messenger) mailserversByFleet(fleet string) []mailservers.Mailserver {
 	var items []mailservers.Mailserver
@@ -73,6 +74,7 @@ func (m *Messenger) DisconnectActiveMailserver() {
 
 func (m *Messenger) disconnectMailserver() error {
 	if m.mailserverCycle.activeMailserver == nil {
+		m.logger.Info("no active mailserver")
 		return nil
 	}
 	m.logger.Info("Disconnecting active mailserver", zap.String("nodeID", m.mailserverCycle.activeMailserver.ID))
@@ -363,7 +365,10 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 			if err != nil {
 				return err
 			}
+			m.logger.Info("adding peer")
+			m.server.AddTrustedPeer(node)
 			m.server.AddPeer(node)
+			m.logger.Info("peer addded")
 			if err := m.peerStore.Update([]*enode.Node{node}); err != nil {
 				return err
 			}
@@ -396,6 +401,7 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 				m.logger.Error("error checking server status", zap.Error(err))
 				return err
 			}
+			m.logger.Info("Checking mailserver status", zap.Any("status", activeMailserverStatus))
 			if activeMailserverStatus == connected {
 				nodeConnected = true
 				loop = false
@@ -403,6 +409,7 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 				break
 			}
 		case <-timeout:
+			m.logger.Info("stopping timeout")
 			ticker.Stop()
 			loop = false
 		}
@@ -417,15 +424,10 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 }
 
 func (m *Messenger) getActiveMailserver() *mailservers.Mailserver {
-	m.mailserverCycle.RLock()
-	defer m.mailserverCycle.RUnlock()
 	return m.mailserverCycle.activeMailserver
 }
 
 func (m *Messenger) isActiveMailserverAvailable() bool {
-	m.mailserverCycle.RLock()
-	defer m.mailserverCycle.RUnlock()
-
 	mailserverStatus, err := m.activeMailserverStatus()
 	if err != nil {
 		return false
@@ -458,7 +460,8 @@ func (m *Messenger) mailserverPeersInfo() []ConnectedPeer {
 	var connectedPeers []ConnectedPeer
 	for _, connectedPeer := range m.server.PeersInfo() {
 		connectedPeers = append(connectedPeers, ConnectedPeer{
-			UniqueID: connectedPeer.Enode,
+			// This is a bit fragile, but should work
+			UniqueID: strings.TrimSuffix(connectedPeer.Enode, "?discport=0"),
 		})
 	}
 
@@ -466,6 +469,8 @@ func (m *Messenger) mailserverPeersInfo() []ConnectedPeer {
 }
 
 func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) error {
+	m.logger.Info("CONNECTED PEER", zap.Any("connected", connectedPeers))
+	m.logger.Info("PEERS", zap.Any("peers", m.mailserverCycle.peers))
 
 	for pID, pInfo := range m.mailserverCycle.peers {
 		if pInfo.status == disconnected {
@@ -476,7 +481,14 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 
 		found := false
 		for _, connectedPeer := range connectedPeers {
-			if connectedPeer.UniqueID == pInfo.mailserver.UniqueID() {
+			id, err := m.mailserverAddressToID(connectedPeer.UniqueID)
+			if err != nil {
+				m.logger.Error("failed to convert id to hex", zap.Error(err))
+				return err
+			}
+
+			m.logger.Info("Comparing", zap.String("pID", pID), zap.String("id", id))
+			if pID == id {
 				found = true
 				break
 			}
@@ -513,6 +525,9 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 			m.mailserverCycle.peers[id] = pInfo
 		}
 	}
+
+	m.logger.Info("PEERS 2", zap.Any("peers", m.mailserverCycle.peers))
+
 	return nil
 }
 
@@ -523,20 +538,29 @@ func (m *Messenger) updateWakuV1PeerStatus() {
 		return
 	}
 
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-m.mailserverCycle.events:
-			m.mailserverCycle.Lock()
+		case <-ticker.C:
+			m.logger.Info("mailser ticker event")
 
 			err := m.handleMailserverCycleEvent(m.mailserverPeersInfo())
-			m.mailserverCycle.Unlock()
+			if err != nil {
+				m.logger.Error("failed to handle mailserver cycle event", zap.Error(err))
+				return
+			}
+
+		case <-m.mailserverCycle.events:
+			m.logger.Info("mailserver cyclce event")
+
+			err := m.handleMailserverCycleEvent(m.mailserverPeersInfo())
 			if err != nil {
 				m.logger.Error("failed to handle mailserver cycle event", zap.Error(err))
 				return
 			}
 		case <-m.quit:
-			m.mailserverCycle.Lock()
-			defer m.mailserverCycle.Unlock()
 			close(m.mailserverCycle.events)
 			m.mailserverCycle.subscription.Unsubscribe()
 			return
@@ -558,21 +582,17 @@ func (m *Messenger) updateWakuV2PeerStatus() {
 	for {
 		select {
 		case status := <-connSubscription.C:
-			m.mailserverCycle.Lock()
 			var connectedPeers []ConnectedPeer
 			for id := range status.Peers {
 				connectedPeers = append(connectedPeers, ConnectedPeer{UniqueID: id})
 			}
 			err := m.handleMailserverCycleEvent(connectedPeers)
-			m.mailserverCycle.Unlock()
 			if err != nil {
 				m.logger.Error("failed to handle mailserver cycle event", zap.Error(err))
 				return
 			}
 
 		case <-m.quit:
-			m.mailserverCycle.Lock()
-			defer m.mailserverCycle.Unlock()
 			close(m.mailserverCycle.events)
 			m.mailserverCycle.subscription.Unsubscribe()
 			connSubscription.Unsubscribe()
@@ -628,15 +648,15 @@ func (m *Messenger) checkMailserverConnection() {
 		case <-m.quit:
 			return
 		case <-ticker.C:
-			m.mailMutex.Lock()
+			m.mailserverCycle.Lock()
 
 			canUseMailservers, err := m.settings.CanUseMailservers()
 			if err != nil {
-				m.mailMutex.Unlock()
+				m.mailserverCycle.Unlock()
 				return
 			}
 			if !canUseMailservers {
-				m.mailMutex.Unlock()
+				m.mailserverCycle.Unlock()
 				continue
 			}
 
@@ -645,7 +665,7 @@ func (m *Messenger) checkMailserverConnection() {
 			pinnedMailserver, err := m.getPinnedMailserver()
 			if err != nil {
 				m.logger.Error("Could not obtain the pinned mailserver", zap.Error(err))
-				m.mailMutex.Unlock()
+				m.mailserverCycle.Unlock()
 				continue
 			}
 
@@ -654,20 +674,22 @@ func (m *Messenger) checkMailserverConnection() {
 				m.logger.Info("pinned mailserver not nil")
 				activeMailserver := m.getActiveMailserver()
 				if activeMailserver == nil || activeMailserver.ID != pinnedMailserver.ID {
+					m.logger.Info("Connecting to mailserver")
 					err = m.connectToMailserver(*pinnedMailserver)
 					if err != nil {
 						m.logger.Error("Could not connect to pinned mailserver", zap.Error(err))
-						m.mailMutex.Unlock()
+						m.mailserverCycle.Unlock()
 						continue
 					}
 				}
 			} else {
 				// or setup a random mailserver:
 				if !m.isActiveMailserverAvailable() {
+					m.cycleMailservers()
 					m.logger.Info("No available active mailserver")
 				}
 			}
-			m.mailMutex.Unlock()
+			m.mailserverCycle.Unlock()
 
 		}
 	}
