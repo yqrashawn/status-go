@@ -228,7 +228,7 @@ func (m *Messenger) resetFiltersPriority(filters []*transport.Filter) {
 	}
 }
 
-func (m *Messenger) RequestAllHistoricMessages2() (*MessengerResponse, error) {
+func (m *Messenger) RequestAllHistoricMessagesWithRetries() (*MessengerResponse, error) {
 	m.mailMutex.Lock()
 	defer m.mailMutex.Unlock()
 	tries := 0
@@ -256,7 +256,6 @@ func (m *Messenger) RequestAllHistoricMessages2() (*MessengerResponse, error) {
 	}
 
 	return nil, errors.New("could not fetch history")
-
 }
 
 // RequestAllHistoricMessages requests all the historic messages for any topic
@@ -520,21 +519,24 @@ func (m *Messenger) processMailserverBatch(batch MailserverBatch) error {
 	ctx, cancel := context.WithTimeout(context.Background(), mailserverRequestTimeout)
 	defer cancel()
 
-	logger.Info("sending request")
-	cursor, storeCursor, err := m.transport.SendMessagesRequestForTopics(ctx, m.activeMailserverID(), batch.From, batch.To, nil, nil, batch.Topics, true)
+	logger.Debug("sending request")
+	mailserverID, err := m.activeMailserverID()
 	if err != nil {
-		logger.Info("FAILED", zap.Error(err))
+		return err
+	}
+	cursor, storeCursor, err := m.transport.SendMessagesRequestForTopics(ctx, mailserverID, batch.From, batch.To, nil, nil, batch.Topics, true)
+	if err != nil {
+		logger.Error("failed to send request", zap.Error(err))
 		return err
 	}
 
-	logger.Info("for request")
 	for len(cursor) != 0 || storeCursor != nil {
 		logger.Info("retrieved cursor", zap.String("cursor", types.EncodeHex(cursor)))
 		err = func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), mailserverRequestTimeout)
 			defer cancel()
 
-			cursor, storeCursor, err = m.transport.SendMessagesRequestForTopics(ctx, m.activeMailserverID(), batch.From, batch.To, cursor, storeCursor, batch.Topics, true)
+			cursor, storeCursor, err = m.transport.SendMessagesRequestForTopics(ctx, mailserverID, batch.From, batch.To, cursor, storeCursor, batch.Topics, true)
 			if err != nil {
 				return err
 			}
@@ -567,14 +569,23 @@ func (m *Messenger) RequestHistoricMessagesForFilter(
 	waitForResponse bool,
 ) ([]byte, *types.StoreRequestCursor, error) {
 
-	if m.activeMailserverID() == nil {
+	activeMailserverID, err := m.activeMailserverID()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if activeMailserverID == nil {
 		m.cycleMailservers()
-		if m.activeMailserverID() == nil {
+		activeMailserverID, err = m.activeMailserverID()
+		if err != nil {
+			return nil, nil, err
+		}
+		if activeMailserverID == nil {
 			return nil, nil, errors.New("no mailserver selected")
 		}
 	}
 
-	return m.transport.SendMessagesRequestForFilter(ctx, m.activeMailserverID(), from, to, cursor, previousStoreCursor, filter, waitForResponse)
+	return m.transport.SendMessagesRequestForFilter(ctx, activeMailserverID, from, to, cursor, previousStoreCursor, filter, waitForResponse)
 }
 
 func (m *Messenger) SyncChatFromSyncedFrom(chatID string) (uint32, error) {

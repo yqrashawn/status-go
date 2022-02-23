@@ -30,7 +30,7 @@ import (
 	"github.com/status-im/status-go/protocol/common"
 	"github.com/status-im/status-go/protocol/identity/alias"
 	"github.com/status-im/status-go/protocol/protobuf"
-	wakuextn "github.com/status-im/status-go/services/wakuext"
+	wakuextn "github.com/status-im/status-go/services/wakuv2ext"
 )
 
 const (
@@ -126,7 +126,7 @@ func main() {
 		return
 	}
 
-	wakuextservice := backend.StatusNode().WakuExtService()
+	wakuextservice := backend.StatusNode().WakuV2ExtService()
 	if wakuextservice == nil {
 		logger.Error("wakuext not available")
 		return
@@ -145,8 +145,12 @@ func main() {
 	messenger := wakuextservice.Messenger()
 
 	time.Sleep(5 * time.Second)
-	_, err = messenger.RequestAllHistoricMessages2()
-	logger.Info("PAST")
+	_, err = messenger.RequestAllHistoricMessagesWithRetries()
+	if err != nil {
+		logger.Error("failed to request messages", err)
+		return
+	}
+
 	community, err := messenger.RequestCommunityInfoFromMailserver(*communityID)
 	if err != nil {
 
@@ -334,22 +338,22 @@ func defaultNodeConfig(installationID string) (*params.NodeConfig, error) {
 	}
 
 	nodeConfig.Name = "StatusIM"
-	clusterConfig, err := params.LoadClusterConfigFromFleet("eth.staging")
+	clusterConfig, err := params.LoadClusterConfigFromFleet("wakuv2.prod")
 	if err != nil {
 		return nil, err
 	}
 	nodeConfig.ClusterConfig = *clusterConfig
+	nodeConfig.ClusterConfig.Fleet = "wakuv2.prod"
 
+	nodeConfig.NoDiscovery = true
 	nodeConfig.WalletConfig = params.WalletConfig{Enabled: true}
 	nodeConfig.LocalNotificationsConfig = params.LocalNotificationsConfig{Enabled: true}
 	nodeConfig.BrowsersConfig = params.BrowsersConfig{Enabled: true}
 	nodeConfig.PermissionsConfig = params.PermissionsConfig{Enabled: true}
 	nodeConfig.MailserversConfig = params.MailserversConfig{Enabled: true}
 	nodeConfig.EnableNTPSync = true
-	nodeConfig.WakuConfig = params.WakuConfig{
-		Enabled:     true,
-		LightClient: true,
-		MinimumPoW:  0.000001,
+	nodeConfig.WakuV2Config = params.WakuV2Config{
+		Enabled: true,
 	}
 
 	nodeConfig.ShhextConfig = params.ShhextConfig{

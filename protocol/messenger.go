@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/status-im/status-go/services/browsers"
 
 	"github.com/pkg/errors"
@@ -151,8 +149,7 @@ type peerStatus struct {
 }
 type mailserverCycle struct {
 	sync.RWMutex
-	activeMailserver *mailserversDB.Mailserver // For usage with wakuV1
-	activeStoreNode  *peer.ID                  // For usage with wakuV2
+	activeMailserver *mailserversDB.Mailserver
 	peers            map[string]peerStatus
 	events           chan *p2p.PeerEvent
 	subscription     event.Subscription
@@ -644,7 +641,7 @@ func (m *Messenger) Start() (*MessengerResponse, error) {
 	}
 	response := &MessengerResponse{}
 
-	mailservers, err := m.allMailserversV1()
+	mailservers, err := m.allMailservers()
 	if err != nil {
 		return nil, err
 	}
@@ -3818,9 +3815,6 @@ func (m *Messenger) AllMessagesFromChatsAndCommunitiesWhichMatchTerm(communityId
 }
 
 func (m *Messenger) SaveMessages(messages []*common.Message) error {
-	for _, m1 := range messages {
-		m.logger.Info("saving message", zap.String("id", m1.ID), zap.String("status", m1.OutgoingStatus))
-	}
 	return m.persistence.SaveMessages(messages)
 }
 

@@ -886,8 +886,8 @@ func (api *PublicAPI) RequestAllHistoricMessages() (*protocol.MessengerResponse,
 	return api.service.messenger.RequestAllHistoricMessages()
 }
 
-func (api *PublicAPI) RequestAllHistoricMessages2() (*protocol.MessengerResponse, error) {
-	return api.service.messenger.RequestAllHistoricMessages2()
+func (api *PublicAPI) RequestAllHistoricMessagesWithRetries() (*protocol.MessengerResponse, error) {
+	return api.service.messenger.RequestAllHistoricMessagesWithRetries()
 }
 
 func (api *PublicAPI) DisconnectActiveMailserver() {
