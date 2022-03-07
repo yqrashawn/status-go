@@ -16,13 +16,14 @@ import (
 )
 
 type Mailserver struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Custom   bool   `json:"custom"`
-	Address  string `json:"address"`
-	Password string `json:"password,omitempty"`
-	Fleet    string `json:"fleet"`
-	Version  uint   `json:"version"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Custom         bool   `json:"custom"`
+	Address        string `json:"address"`
+	Password       string `json:"password,omitempty"`
+	Fleet          string `json:"fleet"`
+	Version        uint   `json:"version"`
+	FailedRequests uint   `json:"-"`
 }
 
 func (m Mailserver) Enode() (*enode.Node, error) {

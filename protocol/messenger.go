@@ -128,7 +128,8 @@ type Messenger struct {
 	telemetryClient            *telemetry.Client
 
 	// TODO(samyoul) Determine if/how the remaining usage of this mutex can be removed
-	mutex sync.Mutex
+	mutex          sync.Mutex
+	mailPeersMutex sync.Mutex
 }
 
 type connStatus int
@@ -142,6 +143,7 @@ const (
 type peerStatus struct {
 	status                connStatus
 	canConnectAfter       time.Time
+	failedRequests        uint
 	lastConnectionAttempt time.Time
 	mailserver            mailserversDB.Mailserver
 }

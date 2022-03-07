@@ -786,18 +786,16 @@ func (m *Messenger) requestCommunityInfoFromMailserver(communityID string, waitF
 	now := uint32(m.transport.GetCurrentTime() / 1000)
 	monthAgo := now - (86400 * 30)
 
-	_, _, err := m.RequestHistoricMessagesForFilter(context.Background(),
-		monthAgo,
-		now,
-		nil,
-		nil,
-		filter,
-		waitForResponse)
-
-	if err != nil {
+	m.performMailserverRequest(func() (*MessengerResponse, error) {
+		_, _, err := m.RequestHistoricMessagesForFilter(context.Background(),
+			monthAgo,
+			now,
+			nil,
+			nil,
+			filter,
+			waitForResponse)
 		return nil, err
-	}
-
+	})
 	if !waitForResponse {
 		return nil, nil
 	}
@@ -813,7 +811,7 @@ func (m *Messenger) requestCommunityInfoFromMailserver(communityID string, waitF
 		select {
 		case <-time.After(200 * time.Millisecond):
 			//send signal to client that message status updated
-			community, err = m.communitiesManager.GetByIDString(communityID)
+			community, err := m.communitiesManager.GetByIDString(communityID)
 			if err != nil {
 				return nil, err
 			}

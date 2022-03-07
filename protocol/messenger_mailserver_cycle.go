@@ -20,6 +20,7 @@ import (
 )
 
 const defaultBackoff = 10 * time.Second
+const graylistBackoff = 3 * time.Minute
 
 func (m *Messenger) mailserversByFleet(fleet string) []mailservers.Mailserver {
 	var items []mailservers.Mailserver
@@ -78,6 +79,7 @@ func (m *Messenger) disconnectMailserver() error {
 		return nil
 	}
 	m.logger.Info("Disconnecting active mailserver", zap.String("nodeID", m.mailserverCycle.activeMailserver.ID))
+	m.mailPeersMutex.Lock()
 	pInfo, ok := m.mailserverCycle.peers[m.mailserverCycle.activeMailserver.ID]
 	if ok {
 		pInfo.status = disconnected
@@ -90,6 +92,7 @@ func (m *Messenger) disconnectMailserver() error {
 			canConnectAfter: time.Now().Add(defaultBackoff),
 		}
 	}
+	m.mailPeersMutex.Unlock()
 
 	if m.mailserverCycle.activeMailserver.Version == 2 {
 		peerID, err := m.mailserverCycle.activeMailserver.PeerID()
@@ -163,6 +166,7 @@ func (m *Messenger) waitUntilMailserverAvailable() error {
 	}
 	now := time.Now()
 	var canConnectAfters []time.Time
+	m.mailPeersMutex.Lock()
 	if pinnedMailserver != nil {
 		pInfo, ok := m.mailserverCycle.peers[pinnedMailserver.ID]
 		if !ok {
@@ -185,6 +189,7 @@ func (m *Messenger) waitUntilMailserverAvailable() error {
 
 		}
 	}
+	m.mailPeersMutex.Unlock()
 	sort.Slice(canConnectAfters, func(i, j int) bool {
 		return canConnectAfters[i].Before(canConnectAfters[j])
 	})
@@ -253,12 +258,15 @@ func (m *Messenger) findNewMailserver() error {
 
 	var mailserverList []mailservers.Mailserver
 	now := time.Now()
+
+	m.mailPeersMutex.Lock()
 	for _, node := range allMailservers {
 		pInfo, ok := m.mailserverCycle.peers[node.ID]
 		if !ok || pInfo.canConnectAfter.Before(now) {
 			mailserverList = append(mailserverList, node)
 		}
 	}
+	m.mailPeersMutex.Unlock()
 
 	m.logger.Info("Finding a new mailserver...")
 
@@ -329,7 +337,12 @@ func (m *Messenger) activeMailserverStatus() (connStatus, error) {
 
 	mailserverID := m.mailserverCycle.activeMailserver.ID
 
-	return m.mailserverCycle.peers[mailserverID].status, nil
+	m.mailPeersMutex.Lock()
+	status := m.mailserverCycle.peers[mailserverID].status
+	m.mailPeersMutex.Unlock()
+
+	return status, nil
+
 }
 
 func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
@@ -374,6 +387,7 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 			}
 		}
 
+		m.mailPeersMutex.Lock()
 		pInfo, ok := m.mailserverCycle.peers[ms.ID]
 		if ok {
 			pInfo.status = connecting
@@ -387,6 +401,7 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 				lastConnectionAttempt: time.Now(),
 			}
 		}
+		m.mailPeersMutex.Unlock()
 	}
 
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -416,7 +431,6 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 	}
 
 	if nodeConnected {
-		m.logger.Info("Mailserver available", zap.String("id", ms.ID), zap.Any("ms", m.mailserverCycle.peers[ms.ID]))
 		signal.SendMailserverAvailable(m.mailserverCycle.activeMailserver.Address, m.mailserverCycle.activeMailserver.ID)
 	}
 
@@ -468,9 +482,24 @@ func (m *Messenger) mailserverPeersInfo() []ConnectedPeer {
 	return connectedPeers
 }
 
+func (m *Messenger) penalizeMailserver(id string) {
+	m.mailPeersMutex.Lock()
+	defer m.mailPeersMutex.Unlock()
+	pInfo, ok := m.mailserverCycle.peers[id]
+	if !ok {
+		pInfo.status = disconnected
+	}
+
+	pInfo.canConnectAfter = time.Now().Add(graylistBackoff)
+	m.mailserverCycle.peers[id] = pInfo
+}
+
 func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) error {
 	m.logger.Info("CONNECTED PEER", zap.Any("connected", connectedPeers))
 	m.logger.Info("PEERS", zap.Any("peers", m.mailserverCycle.peers))
+
+	m.mailPeersMutex.Lock()
+	defer m.mailPeersMutex.Unlock()
 
 	for pID, pInfo := range m.mailserverCycle.peers {
 		if pInfo.status == disconnected {
@@ -516,7 +545,9 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 		if !ok || pInfo.status != connected {
 			m.logger.Info("Peer connected", zap.String("peer", connectedPeer.UniqueID))
 			pInfo.status = connected
-			pInfo.canConnectAfter = time.Now().Add(defaultBackoff)
+			if pInfo.canConnectAfter.Before(time.Now()) {
+				pInfo.canConnectAfter = time.Now().Add(defaultBackoff)
+			}
 
 			if m.mailserverCycle.activeMailserver != nil && id == m.mailserverCycle.activeMailserver.ID {
 				m.logger.Info("Mailserver available", zap.String("address", connectedPeer.UniqueID))
@@ -639,6 +670,9 @@ func (m *Messenger) getPinnedMailserver() (*mailservers.Mailserver, error) {
 	return nil, nil
 }
 
+func (m *Messenger) CheckMailserverConnection() {
+	m.checkMailserverConnection()
+}
 func (m *Messenger) checkMailserverConnection() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
