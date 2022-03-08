@@ -595,8 +595,8 @@ func (m *Messenger) processMailserverBatch(batch MailserverBatch) error {
 			return err
 		}
 	}
-	logger.Info("waiting until message processed")
-	m.waitUntilP2PMessagesProcessed()
+	//	logger.Info("waiting until message processed")
+	//	m.waitUntilP2PMessagesProcessed()
 	logger.Info("synced topic")
 	return nil
 }
