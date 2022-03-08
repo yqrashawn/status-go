@@ -56,8 +56,6 @@ func (m *Messenger) shouldSync() (bool, error) {
 }
 
 func (m *Messenger) scheduleSyncChat(chat *Chat) (bool, error) {
-	m.mailserverCycle.Lock()
-	defer m.mailserverCycle.Unlock()
 	shouldSync, err := m.shouldSync()
 	if err != nil {
 		m.logger.Error("failed to get should sync", zap.Error(err))
@@ -97,16 +95,9 @@ func (m *Messenger) connectToNewMailserverAndWait() error {
 	// If pinned mailserver is not nil, no need to disconnect and wait for it to be available
 	if pinnedMailserver == nil {
 		m.disconnectActiveMailserver()
-		m.logger.Info("waiting until mailserver available")
-		err := m.waitUntilMailserverAvailable()
-		if err != nil {
-			return err
-		}
-		m.logger.Info("finding new mailserver")
-
 	}
-	return m.findNewMailserver()
 
+	return m.findNewMailserver()
 }
 func (m *Messenger) performMailserverRequest(fn func() (*MessengerResponse, error)) (*MessengerResponse, error) {
 	m.mailserverCycle.Lock()
@@ -142,6 +133,7 @@ func (m *Messenger) performMailserverRequest(fn func() (*MessengerResponse, erro
 
 		// Change mailserver
 		if activeMailserver.FailedRequests >= mailserverMaxFailedRequests {
+			m.logger.Info("too many failed requests")
 			err := m.connectToNewMailserverAndWait()
 			if err != nil {
 				return nil, err

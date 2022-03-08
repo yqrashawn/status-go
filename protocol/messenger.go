@@ -691,13 +691,16 @@ func (m *Messenger) handleConnectionChange(online bool) {
 			}
 			m.shouldPublishContactCode = false
 		}
+		_, err := m.RequestAllHistoricMessagesWithRetries()
+		if err != nil {
+			m.logger.Warn("failed to fetch historic messages", zap.Error(err))
+		}
 
 	} else {
 		if m.pushNotificationClient != nil {
 			m.pushNotificationClient.Offline()
 		}
 
-		m.DisconnectActiveMailserver() // force mailserver cycle to run again
 	}
 
 	m.ensVerifier.SetOnline(online)

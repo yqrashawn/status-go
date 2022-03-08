@@ -32,18 +32,23 @@ func (m *Messenger) mailserversByFleet(fleet string) []mailservers.Mailserver {
 	return items
 }
 
-type byRTTMs []*mailservers.PingResult
+type byRTTMsAndCanConnectBefore []SortedMailserver
 
-func (s byRTTMs) Len() int {
+func (s byRTTMsAndCanConnectBefore) Len() int {
 	return len(s)
 }
 
-func (s byRTTMs) Swap(i, j int) {
+func (s byRTTMsAndCanConnectBefore) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s byRTTMs) Less(i, j int) bool {
-	return *s[i].RTTMs < *s[j].RTTMs
+func (s byRTTMsAndCanConnectBefore) Less(i, j int) bool {
+	// Slightly inaccurate as time sensitive sorting, but it does not matter so much
+	now := time.Now()
+	if s[i].CanConnectAfter.Before(now) && s[j].CanConnectAfter.Before(now) {
+		return s[i].RTTMs < s[j].RTTMs
+	}
+	return s[i].CanConnectAfter.Before(s[j].CanConnectAfter)
 }
 
 func (m *Messenger) activeMailserverID() ([]byte, error) {
@@ -227,6 +232,12 @@ func (m *Messenger) allMailservers() ([]mailservers.Mailserver, error) {
 	return allMailservers, nil
 }
 
+type SortedMailserver struct {
+	Address         string
+	RTTMs           int
+	CanConnectAfter time.Time
+}
+
 func (m *Messenger) findNewMailserver() error {
 	pinnedMailserver, err := m.getPinnedMailserver()
 	if err != nil {
@@ -256,33 +267,21 @@ func (m *Messenger) findNewMailserver() error {
 		}
 	}
 
-	var mailserverList []mailservers.Mailserver
-	now := time.Now()
-
-	m.mailPeersMutex.Lock()
-	for _, node := range allMailservers {
-		pInfo, ok := m.mailserverCycle.peers[node.ID]
-		if !ok || pInfo.canConnectAfter.Before(now) {
-			mailserverList = append(mailserverList, node)
-		}
-	}
-	m.mailPeersMutex.Unlock()
-
 	m.logger.Info("Finding a new mailserver...")
 
 	var mailserverStr []string
-	for _, m := range mailserverList {
+	for _, m := range allMailservers {
 		mailserverStr = append(mailserverStr, m.Address)
 	}
 
-	if len(mailserverList) == 0 {
+	if len(allMailservers) == 0 {
 		m.logger.Warn("No mailservers available") // Do nothing...
 		return nil
 
 	}
 
 	var parseFn func(string) (string, error)
-	if mailserverList[0].Version == 2 {
+	if allMailservers[0].Version == 2 {
 		parseFn = mailservers.MultiAddressToAddress
 	} else {
 		parseFn = mailservers.EnodeStringToAddr
@@ -300,18 +299,41 @@ func (m *Messenger) findNewMailserver() error {
 		}
 		availableMailservers = append(availableMailservers, result)
 	}
-	sort.Sort(byRTTMs(availableMailservers))
 
 	if len(availableMailservers) == 0 {
 		m.logger.Warn("No mailservers available") // Do nothing...
 		return nil
 	}
 
+	mailserversByAddress := make(map[string]mailservers.Mailserver)
+	for idx := range allMailservers {
+		mailserversByAddress[allMailservers[idx].Address] = allMailservers[idx]
+	}
+	var sortedMailservers []SortedMailserver
+	for _, ping := range availableMailservers {
+		address := ping.Address
+		ms := mailserversByAddress[address]
+		sortedMailserver := SortedMailserver{
+			Address: address,
+			RTTMs:   *ping.RTTMs,
+		}
+		m.mailPeersMutex.Lock()
+		pInfo, ok := m.mailserverCycle.peers[ms.ID]
+		m.mailPeersMutex.Unlock()
+		if ok {
+			sortedMailserver.CanConnectAfter = pInfo.canConnectAfter
+		}
+
+		sortedMailservers = append(sortedMailservers, sortedMailserver)
+
+	}
+	sort.Sort(byRTTMsAndCanConnectBefore(sortedMailservers))
+
 	// Picks a random mailserver amongs the ones with the lowest latency
 	// The pool size is 1/4 of the mailservers were pinged successfully
-	pSize := poolSize(len(availableMailservers) - 1)
+	pSize := poolSize(len(sortedMailservers) - 1)
 	if pSize <= 0 {
-		pSize = len(availableMailservers)
+		pSize = len(sortedMailservers)
 	}
 
 	r, err := rand.Int(rand.Reader, big.NewInt(int64(pSize)))
@@ -319,13 +341,8 @@ func (m *Messenger) findNewMailserver() error {
 		return err
 	}
 
-	msPing := availableMailservers[r.Int64()]
-	var ms mailservers.Mailserver
-	for idx := range mailserverList {
-		if msPing.Address == mailserverList[idx].Address {
-			ms = mailserverList[idx]
-		}
-	}
+	msPing := sortedMailservers[r.Int64()]
+	ms := mailserversByAddress[msPing.Address]
 	m.logger.Info("Connecting to mailserver", zap.String("address", ms.Address))
 	return m.connectToMailserver(ms)
 }
@@ -499,8 +516,6 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 	m.logger.Info("PEERS", zap.Any("peers", m.mailserverCycle.peers))
 
 	m.mailPeersMutex.Lock()
-	defer m.mailPeersMutex.Unlock()
-
 	for pID, pInfo := range m.mailserverCycle.peers {
 		if pInfo.status == disconnected {
 			continue
@@ -516,7 +531,6 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 				return err
 			}
 
-			m.logger.Info("Comparing", zap.String("pID", pID), zap.String("id", id))
 			if pID == id {
 				found = true
 				break
@@ -538,7 +552,6 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 			return err
 		}
 		if id == "" {
-			m.logger.Warn("id not found", zap.String("address", connectedPeer.UniqueID))
 			continue
 		}
 		pInfo, ok := m.mailserverCycle.peers[id]
@@ -557,6 +570,7 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 		}
 	}
 
+	m.mailPeersMutex.Unlock()
 	m.logger.Info("PEERS 2", zap.Any("peers", m.mailserverCycle.peers))
 
 	return nil
@@ -575,12 +589,25 @@ func (m *Messenger) updateWakuV1PeerStatus() {
 	for {
 		select {
 		case <-ticker.C:
-			m.logger.Info("mailser ticker event")
-
 			err := m.handleMailserverCycleEvent(m.mailserverPeersInfo())
 			if err != nil {
 				m.logger.Error("failed to handle mailserver cycle event", zap.Error(err))
 				return
+			}
+
+			ms := m.getActiveMailserver()
+			if ms != nil {
+				node, err := ms.Enode()
+				if err != nil {
+					return
+				}
+				m.logger.Info("adding peer")
+				m.server.AddTrustedPeer(node)
+				m.server.AddPeer(node)
+				m.logger.Info("peer addded")
+				if err := m.peerStore.Update([]*enode.Node{node}); err != nil {
+					return
+				}
 			}
 
 		case <-m.mailserverCycle.events:
