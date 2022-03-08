@@ -334,10 +334,14 @@ func (srv *Server) RemovePeer(node *enode.Node) {
 		ch  chan *PeerEvent
 		sub event.Subscription
 	)
+	srv.log.Info("removing peer")
 	// Disconnect the peer on the main loop.
 	srv.doPeerOp(func(peers map[enode.ID]*Peer) {
 		srv.dialsched.removeStatic(node)
+		srv.log.Info("doing peer op")
 		if peer := peers[node.ID()]; peer != nil {
+
+			srv.log.Info("removing peer with id")
 			ch = make(chan *PeerEvent, 1)
 			sub = srv.peerFeed.Subscribe(ch)
 			peer.Disconnect(DiscRequested)
@@ -749,7 +753,7 @@ running:
 		case n := <-srv.addtrusted:
 			// This channel is used by AddTrustedPeer to add a node
 			// to the trusted node set.
-			srv.log.Trace("Adding trusted node", "node", n)
+			srv.log.Info("Adding trusted node", "node", n)
 			trusted[n.ID()] = true
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(trustedConn, true)
@@ -799,7 +803,7 @@ running:
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			delete(peers, pd.ID())
-			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
+			srv.log.Info("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
 				inboundCount--

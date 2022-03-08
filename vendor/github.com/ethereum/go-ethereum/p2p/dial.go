@@ -243,7 +243,7 @@ loop:
 		select {
 		case node := <-nodesCh:
 			if err := d.checkDial(node); err != nil {
-				d.log.Trace("Discarding dial candidate", "id", node.ID(), "ip", node.IP(), "reason", err)
+				d.log.Info("Discarding dial candidate", "id", node.ID(), "ip", node.IP(), "reason", err)
 			} else {
 				d.startDial(newDialTask(node, dynDialedConn))
 			}
@@ -277,20 +277,24 @@ loop:
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
-			d.log.Trace("Adding static node", "id", id, "ip", node.IP(), "added", !exists)
+			d.log.Info("Adding static node", "id", id, "ip", node.IP(), "added", !exists)
 			if exists {
+				d.log.Info("Exists")
 				continue loop
 			}
 			task := newDialTask(node, staticDialedConn)
 			d.static[id] = task
 			if d.checkDial(node) == nil {
+				d.log.Info("adding to static pool")
 				d.addToStaticPool(task)
+			} else {
+				d.log.Info("not adding to static pool")
 			}
 
 		case node := <-d.remStaticCh:
 			id := node.ID()
 			task := d.static[id]
-			d.log.Trace("Removing static node", "id", id, "ok", task != nil)
+			d.log.Info("Removing static node", "id", id, "ok", task != nil)
 			if task != nil {
 				delete(d.static, id)
 				if task.staticPoolIndex >= 0 {
@@ -451,7 +455,7 @@ func (d *dialScheduler) removeFromStaticPool(idx int) {
 
 // startDial runs the given dial task in a separate goroutine.
 func (d *dialScheduler) startDial(task *dialTask) {
-	d.log.Trace("Starting p2p dial", "id", task.dest.ID(), "ip", task.dest.IP(), "flag", task.flags)
+	d.log.Info("Starting p2p dial", "id", task.dest.ID(), "ip", task.dest.IP(), "flag", task.flags)
 	hkey := string(task.dest.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[task.dest.ID()] = task
@@ -523,13 +527,13 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 		if t.resolveDelay > maxResolveDelay {
 			t.resolveDelay = maxResolveDelay
 		}
-		d.log.Debug("Resolving node failed", "id", t.dest.ID(), "newdelay", t.resolveDelay)
+		d.log.Info("Resolving node failed", "id", t.dest.ID(), "newdelay", t.resolveDelay)
 		return false
 	}
 	// The node was found.
 	t.resolveDelay = initialResolveDelay
 	t.dest = resolved
-	d.log.Debug("Resolved node", "id", t.dest.ID(), "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()})
+	d.log.Info("Resolved node", "id", t.dest.ID(), "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()})
 	return true
 }
 
@@ -537,7 +541,7 @@ func (t *dialTask) resolve(d *dialScheduler) bool {
 func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 	fd, err := d.dialer.Dial(d.ctx, t.dest)
 	if err != nil {
-		d.log.Trace("Dial error", "id", t.dest.ID(), "addr", nodeAddr(t.dest), "conn", t.flags, "err", cleanupDialErr(err))
+		d.log.Info("Dial error", "id", t.dest.ID(), "addr", nodeAddr(t.dest), "conn", t.flags, "err", cleanupDialErr(err))
 		return &dialError{err}
 	}
 	mfd := newMeteredConn(fd, false, &net.TCPAddr{IP: dest.IP(), Port: dest.TCP()})
