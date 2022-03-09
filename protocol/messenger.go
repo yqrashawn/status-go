@@ -691,10 +691,12 @@ func (m *Messenger) handleConnectionChange(online bool) {
 			}
 			m.shouldPublishContactCode = false
 		}
-		_, err := m.RequestAllHistoricMessagesWithRetries()
-		if err != nil {
-			m.logger.Warn("failed to fetch historic messages", zap.Error(err))
-		}
+		go func() {
+			_, err := m.RequestAllHistoricMessagesWithRetries()
+			if err != nil {
+				m.logger.Warn("failed to fetch historic messages", zap.Error(err))
+			}
+		}()
 
 	} else {
 		if m.pushNotificationClient != nil {

@@ -163,52 +163,6 @@ func (m *Messenger) getFleet() (string, error) {
 	return fleet, nil
 }
 
-func (m *Messenger) waitUntilMailserverAvailable() error {
-	pinnedMailserver, err := m.getPinnedMailserver()
-	if err != nil {
-		m.logger.Error("Could not obtain the pinned mailserver", zap.Error(err))
-		return err
-	}
-	now := time.Now()
-	var canConnectAfters []time.Time
-	m.mailPeersMutex.Lock()
-	if pinnedMailserver != nil {
-		pInfo, ok := m.mailserverCycle.peers[pinnedMailserver.ID]
-		if !ok {
-			return nil
-		}
-		canConnectAfters = append(canConnectAfters, pInfo.canConnectAfter)
-	} else {
-
-		allMailservers, err := m.allMailservers()
-		if err != nil {
-			return err
-		}
-		for _, node := range allMailservers {
-			pInfo, ok := m.mailserverCycle.peers[node.ID]
-			// No info about mailserver, mailserver is available
-			if !ok {
-				return nil
-			}
-			canConnectAfters = append(canConnectAfters, pInfo.canConnectAfter)
-
-		}
-	}
-	m.mailPeersMutex.Unlock()
-	sort.Slice(canConnectAfters, func(i, j int) bool {
-		return canConnectAfters[i].Before(canConnectAfters[j])
-	})
-
-	// If the first is before, we can return
-	if canConnectAfters[0].Before(now) {
-		return nil
-	}
-
-	time.Sleep(canConnectAfters[0].Sub(now))
-
-	return nil
-}
-
 func (m *Messenger) allMailservers() ([]mailservers.Mailserver, error) {
 	// Append user mailservers
 	fleet, err := m.getFleet()
@@ -365,7 +319,6 @@ func (m *Messenger) activeMailserverStatus() (connStatus, error) {
 func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 
 	m.logger.Info("Connecting to mailserver", zap.Any("peer", ms.ID))
-	nodeConnected := false
 
 	m.mailserverCycle.activeMailserver = &ms
 	signal.SendMailserverChanged(m.mailserverCycle.activeMailserver.Address, m.mailserverCycle.activeMailserver.ID)
@@ -380,9 +333,7 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 		return err
 	}
 
-	if activeMailserverStatus == connected {
-		nodeConnected = true
-	} else {
+	if activeMailserverStatus != connected {
 		// Attempt to connect to mailserver by adding it as a peer
 
 		if ms.Version == 2 {
@@ -420,37 +371,6 @@ func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 		}
 		m.mailPeersMutex.Unlock()
 	}
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	timeout := time.After(60 * time.Second)
-	loop := true
-
-	for loop {
-		select {
-		case <-ticker.C:
-			activeMailserverStatus, err := m.activeMailserverStatus()
-			if err != nil {
-				m.logger.Error("error checking server status", zap.Error(err))
-				return err
-			}
-			m.logger.Info("Checking mailserver status", zap.Any("status", activeMailserverStatus))
-			if activeMailserverStatus == connected {
-				nodeConnected = true
-				loop = false
-				ticker.Stop()
-				break
-			}
-		case <-timeout:
-			m.logger.Info("stopping timeout")
-			ticker.Stop()
-			loop = false
-		}
-	}
-
-	if nodeConnected {
-		signal.SendMailserverAvailable(m.mailserverCycle.activeMailserver.Address, m.mailserverCycle.activeMailserver.ID)
-	}
-
 	return nil
 }
 
@@ -566,6 +486,9 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 				m.logger.Info("Mailserver available", zap.String("address", connectedPeer.UniqueID))
 				signal.SendMailserverAvailable(m.mailserverCycle.activeMailserver.Address, m.mailserverCycle.activeMailserver.ID)
 			}
+			// Query mailserver
+			go func() { m.performMailserverRequest(m.RequestAllHistoricMessages) }()
+
 			m.mailserverCycle.peers[id] = pInfo
 		}
 	}
