@@ -88,13 +88,13 @@ func (m *Messenger) disconnectMailserver() error {
 	pInfo, ok := m.mailserverCycle.peers[m.mailserverCycle.activeMailserver.ID]
 	if ok {
 		pInfo.status = disconnected
-		pInfo.canConnectAfter = time.Now().Add(defaultBackoff)
+		pInfo.canConnectAfter = time.Now().Add(graylistBackoff)
 		m.mailserverCycle.peers[m.mailserverCycle.activeMailserver.ID] = pInfo
 	} else {
 		m.mailserverCycle.peers[m.mailserverCycle.activeMailserver.ID] = peerStatus{
 			status:          disconnected,
 			mailserver:      *m.mailserverCycle.activeMailserver,
-			canConnectAfter: time.Now().Add(defaultBackoff),
+			canConnectAfter: time.Now().Add(graylistBackoff),
 		}
 	}
 	m.mailPeersMutex.Unlock()
@@ -249,6 +249,7 @@ func (m *Messenger) findNewMailserver() error {
 	var availableMailservers []*mailservers.PingResult
 	for _, result := range pingResult {
 		if result.Err != nil {
+			m.logger.Info("connecting error", zap.String("eerr", *result.Err))
 			continue // The results with error are ignored
 		}
 		availableMailservers = append(availableMailservers, result)
@@ -297,7 +298,7 @@ func (m *Messenger) findNewMailserver() error {
 
 	msPing := sortedMailservers[r.Int64()]
 	ms := mailserversByAddress[msPing.Address]
-	m.logger.Info("Connecting to mailserver", zap.String("address", ms.Address))
+	m.logger.Info("connecting to mailserver", zap.String("address", ms.Address))
 	return m.connectToMailserver(ms)
 }
 
@@ -318,7 +319,7 @@ func (m *Messenger) activeMailserverStatus() (connStatus, error) {
 
 func (m *Messenger) connectToMailserver(ms mailservers.Mailserver) error {
 
-	m.logger.Info("Connecting to mailserver", zap.Any("peer", ms.ID))
+	m.logger.Info("connecting to mailserver", zap.Any("peer", ms.ID))
 
 	m.mailserverCycle.activeMailserver = &ms
 	signal.SendMailserverChanged(m.mailserverCycle.activeMailserver.Address, m.mailserverCycle.activeMailserver.ID)
@@ -492,8 +493,32 @@ func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) e
 			m.mailserverCycle.peers[id] = pInfo
 		}
 	}
-
 	m.mailPeersMutex.Unlock()
+	// Check whether we want to disconnect the mailserver
+	if m.mailserverCycle.activeMailserver != nil {
+		if m.mailserverCycle.activeMailserver.FailedRequests >= mailserverMaxFailedRequests {
+			m.penalizeMailserver(m.mailserverCycle.activeMailserver.ID)
+			m.logger.Info("connecting too many failed requests")
+			m.mailserverCycle.activeMailserver.FailedRequests = 0
+
+			return m.connectToNewMailserverAndWait()
+		}
+
+		m.mailPeersMutex.Lock()
+		pInfo, ok := m.mailserverCycle.peers[m.mailserverCycle.activeMailserver.ID]
+		m.mailPeersMutex.Unlock()
+		if ok {
+			if pInfo.status != connected && pInfo.lastConnectionAttempt.Add(30*time.Second).Before(time.Now()) {
+				m.logger.Info("penalizing mailserver & disconnecting connecting", zap.String("id", m.mailserverCycle.activeMailserver.ID))
+				m.penalizeMailserver(m.mailserverCycle.activeMailserver.ID)
+				m.disconnectActiveMailserver()
+			}
+		}
+
+	} else {
+		m.cycleMailservers()
+	}
+
 	m.logger.Info("PEERS 2", zap.Any("peers", m.mailserverCycle.peers))
 
 	return nil
@@ -632,48 +657,49 @@ func (m *Messenger) checkMailserverConnection() {
 		case <-m.quit:
 			return
 		case <-ticker.C:
-			m.mailserverCycle.Lock()
+			/*
+				m.mailserverCycle.Lock()
 
-			canUseMailservers, err := m.settings.CanUseMailservers()
-			if err != nil {
-				m.mailserverCycle.Unlock()
-				return
-			}
-			if !canUseMailservers {
-				m.mailserverCycle.Unlock()
-				continue
-			}
+				canUseMailservers, err := m.settings.CanUseMailservers()
+				if err != nil {
+					m.mailserverCycle.Unlock()
+					return
+				}
+				if !canUseMailservers {
+					m.mailserverCycle.Unlock()
+					continue
+				}
 
-			m.logger.Info("Verifying mailserver connection state...")
+				m.logger.Info("Verifying mailserver connection state...")
 
-			pinnedMailserver, err := m.getPinnedMailserver()
-			if err != nil {
-				m.logger.Error("Could not obtain the pinned mailserver", zap.Error(err))
-				m.mailserverCycle.Unlock()
-				continue
-			}
+				pinnedMailserver, err := m.getPinnedMailserver()
+				if err != nil {
+					m.logger.Error("Could not obtain the pinned mailserver", zap.Error(err))
+					m.mailserverCycle.Unlock()
+					continue
+				}
 
-			if pinnedMailserver != nil {
+				if pinnedMailserver != nil {
 
-				m.logger.Info("pinned mailserver not nil")
-				activeMailserver := m.getActiveMailserver()
-				if activeMailserver == nil || activeMailserver.ID != pinnedMailserver.ID {
-					m.logger.Info("Connecting to mailserver")
-					err = m.connectToMailserver(*pinnedMailserver)
-					if err != nil {
-						m.logger.Error("Could not connect to pinned mailserver", zap.Error(err))
-						m.mailserverCycle.Unlock()
-						continue
+					m.logger.Info("pinned mailserver not nil")
+					activeMailserver := m.getActiveMailserver()
+					if activeMailserver == nil || activeMailserver.ID != pinnedMailserver.ID {
+						m.logger.Info("connecting to mailserver")
+						err = m.connectToMailserver(*pinnedMailserver)
+						if err != nil {
+							m.logger.Error("Could not connect to pinned mailserver", zap.Error(err))
+							m.mailserverCycle.Unlock()
+							continue
+						}
+					}
+				} else {
+					// or setup a random mailserver:
+					if !m.isActiveMailserverAvailable() {
+						m.cycleMailservers()
+						m.logger.Info("No available active mailserver")
 					}
 				}
-			} else {
-				// or setup a random mailserver:
-				if !m.isActiveMailserverAvailable() {
-					m.cycleMailservers()
-					m.logger.Info("No available active mailserver")
-				}
-			}
-			m.mailserverCycle.Unlock()
+				m.mailserverCycle.Unlock()*/
 
 		}
 	}

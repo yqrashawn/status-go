@@ -100,14 +100,15 @@ func (m *Messenger) connectToNewMailserverAndWait() error {
 	return m.findNewMailserver()
 }
 func (m *Messenger) performMailserverRequest(fn func() (*MessengerResponse, error)) (*MessengerResponse, error) {
-	if !m.isActiveMailserverAvailable() {
-		return nil, errors.New("mailserver not available")
-	}
 
 	m.mailserverCycle.Lock()
 	defer m.mailserverCycle.Unlock()
 	var tries uint = 0
 	for tries < mailserverMaxTries {
+		if !m.isActiveMailserverAvailable() {
+			return nil, errors.New("mailserver not available")
+		}
+
 		m.logger.Info("Trying performing mailserver requests", zap.Uint("try", tries))
 		activeMailserver := m.getActiveMailserver()
 		// Make sure we are connected to a mailserver
@@ -129,12 +130,7 @@ func (m *Messenger) performMailserverRequest(fn func() (*MessengerResponse, erro
 
 		// Change mailserver
 		if activeMailserver.FailedRequests >= mailserverMaxFailedRequests {
-			m.penalizeMailserver(activeMailserver.ID)
-			m.logger.Info("too many failed requests")
-			err := m.connectToNewMailserverAndWait()
-			if err != nil {
-				return nil, err
-			}
+			return nil, errors.New("too many failed requests")
 		} else {
 			// Wait a couple of second not to spam
 			time.Sleep(2 * time.Second)
