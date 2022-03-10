@@ -231,7 +231,9 @@ loop:
 	for {
 		// Launch new dials if slots are available.
 		slots := d.freeDialSlots()
+		d.log.Info("free dial slots", "slots", 0)
 		slots -= d.startStaticDials(slots)
+		d.log.Info("started dial slots", "slots", 0)
 		if slots > 0 {
 			nodesCh = d.nodesIn
 		} else {
@@ -399,18 +401,25 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 		// node and the actual endpoint will be resolved later in dialTask.
 		return errNoPort
 	}
+
+	d.log.Info("Checking p2p dial", "id", n.ID(), "ip", n.IP())
 	if _, ok := d.dialing[n.ID()]; ok {
+		d.log.Info("already dialing")
 		return errAlreadyDialing
 	}
 	if _, ok := d.peers[n.ID()]; ok {
+		d.log.Info("already connected")
 		return errAlreadyConnected
 	}
 	if d.netRestrict != nil && !d.netRestrict.Contains(n.IP()) {
+		d.log.Info("not whitelisted")
 		return errNotWhitelisted
 	}
 	if d.history.contains(string(n.ID().Bytes())) {
+		d.log.Info("recently dialed")
 		return errRecentlyDialed
 	}
+	d.log.Info("all ok")
 	return nil
 }
 
@@ -427,9 +436,13 @@ func (d *dialScheduler) startStaticDials(n int) (started int) {
 
 // updateStaticPool attempts to move the given static dial back into staticPool.
 func (d *dialScheduler) updateStaticPool(id enode.ID) {
+	d.log.Info("updating static pool", "id", id)
 	task, ok := d.static[id]
 	if ok && task.staticPoolIndex < 0 && d.checkDial(task.dest) == nil {
+		d.log.Info("update-static-pool adding")
 		d.addToStaticPool(task)
+	} else {
+		d.log.Info("update-static-pool not adding")
 	}
 }
 
