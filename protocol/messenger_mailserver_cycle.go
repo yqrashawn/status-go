@@ -265,6 +265,9 @@ func (m *Messenger) findNewMailserver() error {
 		mailserversByAddress[allMailservers[idx].Address] = allMailservers[idx]
 	}
 	var sortedMailservers []SortedMailserver
+	m.logger.Info("connecting rtt", zap.Any("ping", pingResult))
+	m.logger.Info("connecting avail", zap.Any("ping", availableMailservers))
+	m.logger.Info("connecting pre-sorted", zap.Any("sor", mailserverStr))
 	for _, ping := range availableMailservers {
 		address := ping.Address
 		ms := mailserversByAddress[address]
@@ -283,6 +286,7 @@ func (m *Messenger) findNewMailserver() error {
 
 	}
 	sort.Sort(byRTTMsAndCanConnectBefore(sortedMailservers))
+	m.logger.Info("connecting sorted", zap.Any("sor", sortedMailservers))
 
 	// Picks a random mailserver amongs the ones with the lowest latency
 	// The pool size is 1/4 of the mailservers were pinged successfully
@@ -435,6 +439,9 @@ func (m *Messenger) penalizeMailserver(id string) {
 func (m *Messenger) handleMailserverCycleEvent(connectedPeers []ConnectedPeer) error {
 	m.logger.Info("CONNECTED PEER", zap.Any("connected", connectedPeers))
 	m.logger.Info("PEERS", zap.Any("peers", m.mailserverCycle.peers))
+	if m.mailserverCycle.activeMailserver != nil {
+		m.logger.Info("FAILIED", zap.Uint("int", m.mailserverCycle.activeMailserver.FailedRequests))
+	}
 
 	m.mailPeersMutex.Lock()
 	for pID, pInfo := range m.mailserverCycle.peers {
