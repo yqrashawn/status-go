@@ -10,6 +10,12 @@ func DefaultMailservers() []Mailserver {
 			Version: 1,
 		},
 		Mailserver{
+			ID:      "mail-01.do-ams3.eth.prod",
+			Address: "enode://c42f368a23fa98ee546fd247220759062323249ef657d26d357a777443aec04db1b29a3a22ef3e7c548e18493ddaf51a31b0aed6079bd6ebe5ae838fcfaf3a49@178.128.142.54:443",
+			Fleet:   "eth.prod",
+			Version: 1,
+		},
+		Mailserver{
 			ID:      "mail-01.gc-us-central1-a.eth.prod",
 			Address: "enode://ee2b53b0ace9692167a410514bca3024695dbf0e1a68e1dff9716da620efb195f04a4b9e873fb9b74ac84de801106c465b8e2b6c4f0d93b8749d1578bfcaf03e@104.197.238.144:443",
 			Fleet:   "eth.prod",
@@ -22,8 +28,32 @@ func DefaultMailservers() []Mailserver {
 			Version: 1,
 		},
 		Mailserver{
+			ID:      "mail-02.do-ams3.eth.prod",
+			Address: "enode://7aa648d6e855950b2e3d3bf220c496e0cae4adfddef3e1e6062e6b177aec93bc6cdcf1282cb40d1656932ebfdd565729da440368d7c4da7dbd4d004b1ac02bf8@178.128.142.26:443",
+			Fleet:   "eth.prod",
+			Version: 1,
+		},
+		Mailserver{
 			ID:      "mail-02.gc-us-central1-a.eth.prod",
 			Address: "enode://30211cbd81c25f07b03a0196d56e6ce4604bb13db773ff1c0ea2253547fafd6c06eae6ad3533e2ba39d59564cfbdbb5e2ce7c137a5ebb85e99dcfc7a75f99f55@23.236.58.92:443",
+			Fleet:   "eth.prod",
+			Version: 1,
+		},
+		Mailserver{
+			ID:      "mail-03.ac-cn-hongkong-c.eth.prod",
+			Address: "enode://e85f1d4209f2f99da801af18db8716e584a28ad0bdc47fbdcd8f26af74dbd97fc279144680553ec7cd9092afe683ddea1e0f9fc571ebcb4b1d857c03a088853d@47.244.129.82:443",
+			Fleet:   "eth.prod",
+			Version: 1,
+		},
+		Mailserver{
+			ID:      "mail-03.do-ams3.eth.prod",
+			Address: "enode://8a64b3c349a2e0ef4a32ea49609ed6eb3364be1110253c20adc17a3cebbc39a219e5d3e13b151c0eee5d8e0f9a8ba2cd026014e67b41a4ab7d1d5dd67ca27427@178.128.142.94:443",
+			Fleet:   "eth.prod",
+			Version: 1,
+		},
+		Mailserver{
+			ID:      "mail-03.gc-us-central1-a.eth.prod",
+			Address: "enode://44160e22e8b42bd32a06c1532165fa9e096eebedd7fa6d6e5f8bbef0440bc4a4591fe3651be68193a7ec029021cdb496cfe1d7f9f1dc69eb99226e6f39a7a5d4@35.225.221.245:443",
 			Fleet:   "eth.prod",
 			Version: 1,
 		},
