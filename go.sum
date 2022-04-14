@@ -119,6 +119,7 @@ github.com/allegro/bigcache v1.2.1 h1:hg1sY1raCwic3Vnsvje6TT7/pnZba83LeFck5NrFKS
 github.com/allegro/bigcache v1.2.1/go.mod h1:Cb/ax3seSYIx7SuZdm2G2xzfwmv3TPSk2ucNfQESPXM=
 github.com/anacrolix/args v0.3.0/go.mod h1:41JBnF8sKExNVLHPkCdL74jkZc3dSxAkGsk1TuKOUFI=
 github.com/anacrolix/args v0.4.1-0.20211104085705-59f0fe94eb8f/go.mod h1:41JBnF8sKExNVLHPkCdL74jkZc3dSxAkGsk1TuKOUFI=
+github.com/anacrolix/args v0.5.0/go.mod h1:Fj/N2PehEwTBE5t/V/9xgTcxDkuYQ+5IBoFw/8gkldI=
 github.com/anacrolix/chansync v0.0.0-20210524073341-a336ebc2de92/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
 github.com/anacrolix/chansync v0.1.0/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
 github.com/anacrolix/chansync v0.2.1-0.20210910114620-14955c95ded9/go.mod h1:DZsatdsdXxD0WiwcGl0nJVwyjCKMDv+knl1q2iBjA2k=
@@ -129,7 +130,6 @@ github.com/anacrolix/confluence v1.7.1-0.20210221224747-9cb14aa2c53a/go.mod h1:T
 github.com/anacrolix/confluence v1.7.1-0.20210221225853-90405640e928/go.mod h1:NoLcfoRet+kYttjLXJRmh4qBVrylJsfIItik5GGj21A=
 github.com/anacrolix/confluence v1.7.1-0.20210311004351-d642adb8546c/go.mod h1:KCZ3eObqKECNeZg0ekAoJVakHMP3gAdR8i0bQ26IkzM=
 github.com/anacrolix/confluence v1.8.0/go.mod h1:GsPP6ikA8h/CU7ExbuMOswpzZpPdf1efDPu4rVXL43g=
-github.com/anacrolix/confluence v1.9.0 h1:7WrWktoDw7P4uo1bzgaA8FFesvc7NsTp37sAsG54XlE=
 github.com/anacrolix/confluence v1.9.0/go.mod h1:O5uS+WVgip+3SOcV1K7E/jE3m4DtK7Jk6QJTnU2VS5s=
 github.com/anacrolix/dht v0.0.0-20180412060941-24cbf25b72a4 h1:0yHJvFiGQhJ1gSHJOR8xzmnx45orEt7uiIB6guf0+zc=
 github.com/anacrolix/dht v0.0.0-20180412060941-24cbf25b72a4/go.mod h1:hQfX2BrtuQsLQMYQwsypFAab/GvHg8qxwVi4OJdR1WI=
@@ -145,8 +145,9 @@ github.com/anacrolix/dht/v2 v2.10.0/go.mod h1:KC51tqylRYBu82RM5pEYf+g1n7db+F0tOJ
 github.com/anacrolix/dht/v2 v2.10.5-0.20210902001729-06cc4fe90e53/go.mod h1:zHjijcebN+L7JbzxW0mOraHis+I81EIgsJAAtiw8bQ8=
 github.com/anacrolix/dht/v2 v2.10.6-0.20211007004332-99263ec9c1c8/go.mod h1:WID4DexLrucfnwzv1OV8REzgoCpyVDwEczxIOrUeFrY=
 github.com/anacrolix/dht/v2 v2.14.1-0.20211220010335-4062f7927abf/go.mod h1:zJgaiAU2yhzmchZE2mY8WyZ64LK/F/D9MAeN0ct73qQ=
-github.com/anacrolix/dht/v2 v2.15.2-0.20220123034220-0538803801cb h1:c4e9XiiT0P3uMkONTkpzLVGxz3if5fIn6UB4HTrVlc0=
 github.com/anacrolix/dht/v2 v2.15.2-0.20220123034220-0538803801cb/go.mod h1:GCylVI6WTvbxvhY7pBoHiE5dmjfDWkhqbobDpjND01A=
+github.com/anacrolix/dht/v2 v2.17.0 h1:MrAS6XqVCqNyyskTwxZB2sqhU/GGUdecb2TNe2b2QjE=
+github.com/anacrolix/dht/v2 v2.17.0/go.mod h1:osiyaNrMLG9dw7wUtVMaII/NdCjlXeHjUcYzXnmop68=
 github.com/anacrolix/envpprof v0.0.0-20180404065416-323002cec2fa/go.mod h1:KgHhUaQMc8cC0+cEflSgCFNFbKwi5h54gqtVn8yhP7c=
 github.com/anacrolix/envpprof v1.0.0/go.mod h1:KgHhUaQMc8cC0+cEflSgCFNFbKwi5h54gqtVn8yhP7c=
 github.com/anacrolix/envpprof v1.0.1/go.mod h1:My7T5oSqVfEn4MD4Meczkw/f5lSIndGAKu/0SM/rkf4=
@@ -172,8 +173,9 @@ github.com/anacrolix/log v0.7.1-0.20200604014615-c244de44fd2d/go.mod h1:s5yBP/j0
 github.com/anacrolix/log v0.8.0/go.mod h1:s5yBP/j046fm9odtUTbHOfDUq/zh1W8OkPpJtnX0oQI=
 github.com/anacrolix/log v0.9.0/go.mod h1:s5yBP/j046fm9odtUTbHOfDUq/zh1W8OkPpJtnX0oQI=
 github.com/anacrolix/log v0.10.0/go.mod h1:s5yBP/j046fm9odtUTbHOfDUq/zh1W8OkPpJtnX0oQI=
-github.com/anacrolix/log v0.10.1-0.20220123034749-3920702c17f8 h1:o1KNFCLJ6f5SRMVb70SUFiPnNiazVd0gpMxYfYCsvK4=
 github.com/anacrolix/log v0.10.1-0.20220123034749-3920702c17f8/go.mod h1:GmnE2c0nvz8pOIPUSC9Rawgefy1sDXqposC2wgtBZE4=
+github.com/anacrolix/log v0.11.0 h1:ckLfUNTc1NR3f6hQF0JSaRVDfUMWmRzI8MAdqkRtRmM=
+github.com/anacrolix/log v0.11.0/go.mod h1:D4+CvN8SnruK6zIFS/xPoRJmtvtnxs+CSfDQ+BFxZ68=
 github.com/anacrolix/lsan v0.0.0-20211126052245-807000409a62 h1:P04VG6Td13FHMgS5ZBcJX23NPC/fiC4cp9bXwYujdYM=
 github.com/anacrolix/lsan v0.0.0-20211126052245-807000409a62/go.mod h1:66cFKPCO7Sl4vbFnAaSq7e4OXtdMhRSBagJGWgmpJbM=
 github.com/anacrolix/missinggo v0.0.0-20180522035225-b4a5853e62ff/go.mod h1:b0p+7cn+rWMIphK1gDH2hrDuwGOcbB6V4VXeSsEfHVk=
@@ -251,8 +253,8 @@ github.com/anacrolix/torrent v1.30.2/go.mod h1:vbNxKfaGiNq8edcCaQI1oSNJwh4GMqtMU
 github.com/anacrolix/torrent v1.31.1-0.20210910222643-d957502528e0/go.mod h1:akZJHHFN8aWH2lcPZQ0I3etujnenwYpUvj36HV9uvAI=
 github.com/anacrolix/torrent v1.35.1-0.20211104090255-eaeb38b18c6a/go.mod h1:97nxJW8NIeUyGdBvMOAl9cmcxi8xPez3nlE0RwSZcL0=
 github.com/anacrolix/torrent v1.40.0/go.mod h1:ejOLXT7fZE8ONHsoIYD7WS4/l6SEwtRGxcsP3dEu/Fk=
-github.com/anacrolix/torrent v1.41.0 h1:PCvcbULZRh1LHDsVElfvJ64WsoIT8/YDtqRHnMxF7ao=
-github.com/anacrolix/torrent v1.41.0/go.mod h1:09Wu2vq8z7Is3lPvC+gt6NhObvkkORoN6mbhMI5csPY=
+github.com/anacrolix/torrent v1.41.1-0.20220309095723-02b6ee995497 h1:RZPrvcsS0zjsdGQekNhuh5q0m84IYjWgbW1fq+ahYrs=
+github.com/anacrolix/torrent v1.41.1-0.20220309095723-02b6ee995497/go.mod h1:GZlCftqtWLz7EGJ3Oo+JP35jrU5zENxgvTCJ0w+SUSU=
 github.com/anacrolix/upnp v0.1.1/go.mod h1:LXsbsp5h+WGN7YR+0A7iVXm5BL1LYryDev1zuJMWYQo=
 github.com/anacrolix/upnp v0.1.2-0.20200416075019-5e9378ed1425/go.mod h1:Pz94W3kl8rf+wxH3IbCa9Sq+DTJr8OSbV2Q3/y51vYs=
 github.com/anacrolix/upnp v0.1.3-0.20220123035249-922794e51c96 h1:QAVZ3pN/J4/UziniAhJR2OZ9Ox5kOY2053tBbbqUPYA=

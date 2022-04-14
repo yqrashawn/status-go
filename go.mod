@@ -15,7 +15,8 @@ replace github.com/forPelevin/gomoji => github.com/status-im/gomoji v1.1.3-0.202
 replace github.com/raulk/go-watchdog v1.2.0 => github.com/status-im/go-watchdog v1.2.0-ios-nolibproc
 
 require (
-	github.com/anacrolix/torrent v1.41.0
+	github.com/anacrolix/dht/v2 v2.17.0 // indirect
+	github.com/anacrolix/torrent v1.41.1-0.20220309095723-02b6ee995497
 	github.com/beevik/ntp v0.2.0
 	github.com/cenkalti/backoff/v3 v3.2.2
 	github.com/davecgh/go-spew v1.1.1

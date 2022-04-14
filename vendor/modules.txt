@@ -11,9 +11,7 @@ github.com/VictoriaMetrics/fastcache
 # github.com/anacrolix/chansync v0.3.0
 github.com/anacrolix/chansync
 github.com/anacrolix/chansync/events
-# github.com/anacrolix/confluence v1.9.0
-github.com/anacrolix/confluence/debug-writer
-# github.com/anacrolix/dht/v2 v2.15.2-0.20220123034220-0538803801cb
+# github.com/anacrolix/dht/v2 v2.17.0
 github.com/anacrolix/dht/v2
 github.com/anacrolix/dht/v2/bep44
 github.com/anacrolix/dht/v2/containers
@@ -27,7 +25,7 @@ github.com/anacrolix/dht/v2/types
 github.com/anacrolix/envpprof
 # github.com/anacrolix/go-libutp v1.2.0
 github.com/anacrolix/go-libutp
-# github.com/anacrolix/log v0.10.1-0.20220123034749-3920702c17f8
+# github.com/anacrolix/log v0.11.0
 github.com/anacrolix/log
 # github.com/anacrolix/missinggo v1.3.0
 github.com/anacrolix/missinggo
@@ -57,7 +55,7 @@ github.com/anacrolix/stm
 github.com/anacrolix/stm/stmutil
 # github.com/anacrolix/sync v0.4.0
 github.com/anacrolix/sync
-# github.com/anacrolix/torrent v1.41.0
+# github.com/anacrolix/torrent v1.41.1-0.20220309095723-02b6ee995497
 github.com/anacrolix/torrent
 github.com/anacrolix/torrent/bencode
 github.com/anacrolix/torrent/common
