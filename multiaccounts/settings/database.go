@@ -226,7 +226,7 @@ func (db *Database) SaveSettingField(sf SettingField, value interface{}) error {
 
 // SaveSyncSetting stores setting data from a sync protobuf source, note it does not call SettingField.ValueHandler()
 // nor does this function attempt to write to the Database.SyncQueue
-func (db *Database) SaveSyncSetting(setting SettingField, value interface{}, clock uint64) error {
+func (db *Database) saveSyncSetting(setting SettingField, value interface{}, clock uint64) error {
 	ls, err := db.GetSettingLastSynced(setting)
 	if err != nil {
 		return err
@@ -238,10 +238,6 @@ func (db *Database) SaveSyncSetting(setting SettingField, value interface{}, clo
 	err = db.SetSettingLastSynced(setting, clock)
 	if err != nil {
 		return err
-	}
-
-	if setting.SyncProtobufFactory() != nil && setting.SyncProtobufFactory().AppendHandler() != nil {
-		return setting.SyncProtobufFactory().AppendHandler()(setting, value, db)
 	}
 
 	return db.saveSetting(setting, value)
