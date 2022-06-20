@@ -332,13 +332,6 @@ var (
 		reactFieldName: "stickers/packs-pending",
 		dBColumnName:   "stickers_packs_pending",
 		valueHandler:   JSONBlobHandler,
-		syncProtobufFactory: &SyncProtobufFactory{
-			fromInterface:     stickersPacksPendingProtobufFactory,
-			fromStruct:        stickersPacksPendingProtobufFactoryStruct,
-			valueFromProtobuf: BytesFromSyncProtobuf,
-			protobufType:      protobuf.SyncSetting_STICKERS_PACKS_PENDING,
-			storeHandler:      StickerPacksStoreHandler,
-		},
 	}
 	StickersRecentStickers = SettingField{
 		reactFieldName: "stickers/recent-stickers",
