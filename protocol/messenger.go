@@ -467,7 +467,12 @@ func NewMessenger(
 		if err != nil {
 			return nil, err
 		}
-		csvFile.Write([]byte("timestamp\tmessageID\tfrom\ttopic\tchatID\tmessageType\tmessage\n"))
+
+		_, err = csvFile.Write([]byte("timestamp\tmessageID\tfrom\ttopic\tchatID\tmessageType\tmessage\n"))
+		if err != nil {
+			return nil, err
+		}
+
 		messenger.csvFile = csvFile
 		messenger.shutdownTasks = append(messenger.shutdownTasks, csvFile.Close)
 	}
@@ -3326,11 +3331,16 @@ func (m *Messenger) outputToCSV(timestamp uint32, messageID types.HexBytes, from
 
 	msgJson, err := json.Marshal(parsedMessage)
 	if err != nil {
+		m.logger.Error("could not marshall message", zap.Error(err))
 		return
 	}
 
 	line := fmt.Sprintf("%d\t%s\t%s\t%s\t%s\t%s\t%s\n", timestamp, messageID.String(), from, topic.String(), chatID, msgType, msgJson)
-	m.csvFile.Write([]byte(line))
+	_, err = m.csvFile.Write([]byte(line))
+	if err != nil {
+		m.logger.Error("could not write to csv", zap.Error(err))
+		return
+	}
 }
 
 func (m *Messenger) handleRetrievedMessages(chatWithMessages map[transport.Filter][]*types.Message, storeWakuMessages bool) (*MessengerResponse, error) {
