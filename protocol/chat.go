@@ -306,7 +306,7 @@ func (c *Chat) UpdateFromMessage(message *common.Message, timesource common.Time
 		c.LastMessage = message
 	}
 	// If the clock is higher we set the clock
-	if c.LastClockValue < message.Clock {
+	if c.LastClockValue > message.Clock {
 		c.LastClockValue = message.Clock
 	}
 	return nil
