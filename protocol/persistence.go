@@ -1005,6 +1005,65 @@ func (db sqlitePersistence) StatusUpdates() (statusUpdates []UserStatus, err err
 	return
 }
 
+func (db sqlitePersistence) LastStatusUpdateFromClock(clock uint64) (*UserStatus, error) {
+	var statusUpdate UserStatus
+
+	err := db.db.QueryRow(`
+		SELECT
+			public_key,
+			status_type,
+			clock,
+			custom_text
+		FROM status_updates
+		WHERE clock > ? AND status_type = ?
+		LIMIT 1
+	`, clock, protobuf.StatusUpdate_AUTOMATIC).Scan(&statusUpdate.PublicKey,
+		&statusUpdate.StatusType,
+		&statusUpdate.Clock,
+		&statusUpdate.CustomText)
+
+	switch err {
+	case sql.ErrNoRows:
+		return nil, common.ErrRecordNotFound
+	case nil:
+		return &statusUpdate, nil
+	default:
+		return nil, err
+	}
+}
+
+func (db sqlitePersistence) DeactivatedStatusUpdates(fromClock uint64, tillClock uint64) (statusUpdates []UserStatus, err error) {
+	rows, err := db.db.Query(`
+		SELECT
+			public_key,
+			?,
+			clock + 1,
+			custom_text
+		FROM status_updates
+		WHERE clock > ? AND clock <= ? AND status_type = ?
+	`, protobuf.StatusUpdate_INACTIVE, fromClock, tillClock, protobuf.StatusUpdate_AUTOMATIC)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var userStatus UserStatus
+		err = rows.Scan(
+			&userStatus.PublicKey,
+			&userStatus.StatusType,
+			&userStatus.Clock,
+			&userStatus.CustomText,
+		)
+		if err != nil {
+			return
+		}
+		statusUpdates = append(statusUpdates, userStatus)
+	}
+
+	return
+}
+
 func (db *sqlitePersistence) AddBookmark(bookmark browsers.Bookmark) (browsers.Bookmark, error) {
 	tx, err := db.db.Begin()
 	if err != nil {

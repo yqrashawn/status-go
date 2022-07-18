@@ -267,3 +267,63 @@ func (m *Messenger) HandleStatusUpdate(state *ReceivedMessageState, statusMessag
 func (m *Messenger) StatusUpdates() ([]UserStatus, error) {
 	return m.persistence.StatusUpdates()
 }
+
+func (m *Messenger) timeoutStatusUpdates(fromClock uint64, tillClock uint64) {
+	// Most of the time we only need to time out just one status update,
+	// but the range covers special cases like, other status updates had the same clock value
+	// or the received another status update with higher clock value than the reference clock but
+	// lower clock value than the statusUpdate.Clock
+	deactivatedStatusUpdates, err := m.persistence.DeactivatedStatusUpdates(fromClock, tillClock)
+
+	// Send deactivatedStatusUpdates to Client
+	if err == nil {
+		m.config.messengerSignalsHandler.StatusUpdatesTimedOut(&deactivatedStatusUpdates)
+	}
+}
+
+func (m *Messenger) timeoutAutomaticStatusUpdates() {
+
+	fiveMinutes := uint64(5 * 60)
+	waitDuration := fiveMinutes
+
+	now := uint64(time.Now().Unix())
+	referenceClock := now - fiveMinutes
+
+	statusUpdate, err := m.persistence.LastStatusUpdateFromClock(referenceClock)
+
+	if err == nil {
+		// Extra 5 sec wait (broadcast receiving delay)
+		waitDuration = statusUpdate.Clock + fiveMinutes + 5 - now
+	} else {
+		referenceClock += fiveMinutes
+	}
+
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Duration(waitDuration) * time.Second):
+				tempStatusUpdate, err := m.persistence.LastStatusUpdateFromClock(referenceClock)
+
+				if err == nil {
+					if statusUpdate == nil || tempStatusUpdate.Clock > statusUpdate.Clock {
+						statusUpdate = tempStatusUpdate
+						waitDuration = tempStatusUpdate.Clock + fiveMinutes + 5 - uint64(time.Now().Unix())
+						if waitDuration < 0 {
+							waitDuration = 0
+						}
+					} else {
+						m.timeoutStatusUpdates(referenceClock, tempStatusUpdate.Clock)
+						waitDuration = 0
+						referenceClock = tempStatusUpdate.Clock
+					}
+				} else {
+					// No More status updates to timeout, keep loop running at five minutes interval
+					waitDuration = fiveMinutes
+					referenceClock = uint64(time.Now().Unix())
+				}
+			case <-m.quit:
+				return
+			}
+		}
+	}()
+}
