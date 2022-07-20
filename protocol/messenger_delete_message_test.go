@@ -236,6 +236,7 @@ func (s *MessengerDeleteMessageSuite) TestDeleteMessageFirstThenMessage() {
 	s.Require().Len(state.Response.Messages(), 0) // Message should not be added to response
 	s.Require().Len(state.Response.RemovedMessages(), 0)
 	s.Require().Nil(state.Response.Chats()[0].LastMessage)
+
 }
 
 func (s *MessengerDeleteMessageSuite) TestDeleteMessageUnviewedCount() {
@@ -289,6 +290,8 @@ func (s *MessengerDeleteMessageSuite) TestDeleteMessageUnviewedCount() {
 	s.Require().Len(res.Chats(), 1)
 	s.Require().Len(res.RemovedMessages(), 1)
 	s.Require().Equal(res.Chats()[0].UnviewedMessagesCount, uint(0))
+	s.Require().True(res.Chats()[0].LastMessage.Deleted)
+	s.Require().True(res.Chats()[0].LastMessage.Seen)
 
 }
 

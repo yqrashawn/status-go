@@ -1279,7 +1279,7 @@ func (m *Messenger) HandleChatMessage(state *ReceivedMessageState) error {
 		receivedMessage.OutgoingStatus = common.OutgoingStatusSent
 	}
 
-	if receivedMessage.Deleted && (chat.LastMessage == nil || chat.LastMessage.ID == receivedMessage.ID) {
+	if receivedMessage.Deleted && chat.LastMessage != nil || chat.LastMessage.ID == receivedMessage.ID {
 		// Get last message that is not hidden
 		messages, _, err := m.persistence.MessageByChatID(receivedMessage.LocalChatID, "", 1)
 		if err != nil {
@@ -1290,13 +1290,12 @@ func (m *Messenger) HandleChatMessage(state *ReceivedMessageState) error {
 		} else {
 			chat.LastMessage = nil
 		}
-	}
-
-	if !receivedMessage.Seen {
+	} else {
 		err = chat.UpdateFromMessage(receivedMessage, m.getTimesource())
 		if err != nil {
 			return err
 		}
+
 	}
 
 	// If the chat is not active, create a notification in the center
