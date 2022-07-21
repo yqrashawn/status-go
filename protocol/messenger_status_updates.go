@@ -273,53 +273,49 @@ func (m *Messenger) timeoutStatusUpdates(fromClock uint64, tillClock uint64) {
 	// but the range covers special cases like, other status updates had the same clock value
 	// or the received another status update with higher clock value than the reference clock but
 	// lower clock value than the statusUpdate.Clock
-	deactivatedStatusUpdates, err := m.persistence.DeactivatedStatusUpdates(fromClock, tillClock)
+	deactivatedStatusUpdates, err := m.persistence.DeactivatedAutomaticStatusUpdates(fromClock, tillClock)
 
 	// Send deactivatedStatusUpdates to Client
 	if err == nil {
 		m.config.messengerSignalsHandler.StatusUpdatesTimedOut(&deactivatedStatusUpdates)
+	} else {
+		m.logger.Debug("Unable to deactivate atutomatic status updates", zap.Error(err))
 	}
 }
 
 func (m *Messenger) timeoutAutomaticStatusUpdates() {
 
+	nextClock := uint64(0)
+	waitDuration := uint64(0)
 	fiveMinutes := uint64(5 * 60)
-	waitDuration := fiveMinutes
-
-	now := uint64(time.Now().Unix())
-	referenceClock := now - fiveMinutes
-
-	statusUpdate, err := m.persistence.LastStatusUpdateFromClock(referenceClock)
-
-	if err == nil {
-		// Extra 5 sec wait (broadcast receiving delay)
-		waitDuration = statusUpdate.Clock + fiveMinutes + 5 - now
-	} else {
-		referenceClock += fiveMinutes
-	}
+	referenceClock := uint64(time.Now().Unix()) - fiveMinutes
 
 	go func() {
 		for {
 			select {
 			case <-time.After(time.Duration(waitDuration) * time.Second):
-				tempStatusUpdate, err := m.persistence.LastStatusUpdateFromClock(referenceClock)
+				tempNextClock, err := m.persistence.NextHigherClockValueOfAutomaticStatusUpdates(referenceClock)
 
 				if err == nil {
-					if statusUpdate == nil || tempStatusUpdate.Clock > statusUpdate.Clock {
-						statusUpdate = tempStatusUpdate
-						waitDuration = tempStatusUpdate.Clock + fiveMinutes + 5 - uint64(time.Now().Unix())
+					if nextClock == 0 || tempNextClock > nextClock {
+						nextClock = tempNextClock
+						// Extra 5 sec wait (broadcast receiving delay)
+						waitDuration = tempNextClock + fiveMinutes + 5 - uint64(time.Now().Unix())
 						if waitDuration < 0 {
 							waitDuration = 0
 						}
 					} else {
-						m.timeoutStatusUpdates(referenceClock, tempStatusUpdate.Clock)
+						m.timeoutStatusUpdates(referenceClock, tempNextClock)
 						waitDuration = 0
-						referenceClock = tempStatusUpdate.Clock
+						referenceClock = tempNextClock
 					}
-				} else {
+				} else if err == common.ErrRecordNotFound {
 					// No More status updates to timeout, keep loop running at five minutes interval
 					waitDuration = fiveMinutes
 					referenceClock = uint64(time.Now().Unix())
+				} else {
+					m.logger.Debug("Unable to timeout automatic status updates", zap.Error(err))
+					return
 				}
 			case <-m.quit:
 				return

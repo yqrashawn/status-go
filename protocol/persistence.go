@@ -1005,34 +1005,27 @@ func (db sqlitePersistence) StatusUpdates() (statusUpdates []UserStatus, err err
 	return
 }
 
-func (db sqlitePersistence) LastStatusUpdateFromClock(clock uint64) (*UserStatus, error) {
-	var statusUpdate UserStatus
+func (db sqlitePersistence) NextHigherClockValueOfAutomaticStatusUpdates(clock uint64) (uint64, error) {
+	var nextClock uint64
 
 	err := db.db.QueryRow(`
-		SELECT
-			public_key,
-			status_type,
-			clock,
-			custom_text
+		SELECT clock
 		FROM status_updates
 		WHERE clock > ? AND status_type = ?
 		LIMIT 1
-	`, clock, protobuf.StatusUpdate_AUTOMATIC).Scan(&statusUpdate.PublicKey,
-		&statusUpdate.StatusType,
-		&statusUpdate.Clock,
-		&statusUpdate.CustomText)
+	`, clock, protobuf.StatusUpdate_AUTOMATIC).Scan(&nextClock)
 
 	switch err {
 	case sql.ErrNoRows:
-		return nil, common.ErrRecordNotFound
+		return 0, common.ErrRecordNotFound
 	case nil:
-		return &statusUpdate, nil
+		return nextClock, nil
 	default:
-		return nil, err
+		return 0, err
 	}
 }
 
-func (db sqlitePersistence) DeactivatedStatusUpdates(fromClock uint64, tillClock uint64) (statusUpdates []UserStatus, err error) {
+func (db sqlitePersistence) DeactivatedAutomaticStatusUpdates(fromClock uint64, tillClock uint64) (statusUpdates []UserStatus, err error) {
 	rows, err := db.db.Query(`
 		SELECT
 			public_key,
